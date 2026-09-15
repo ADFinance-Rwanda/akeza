@@ -4,7 +4,7 @@
 
 ## Senior Software Engineer Assessment
 
-**Timebox:** 2--3 days\
+**Timebox:** 3-4 days\
 **Submission:** GitHub repository\
 **Primary Goal:** Evaluate senior-level engineering ability across
 architecture, security, backend design, database engineering,
