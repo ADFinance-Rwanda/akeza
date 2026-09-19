@@ -1,251 +1,225 @@
 # Akeza — Multi-Tenant Project & Task Management Platform
 
-A production-oriented **multi-tenant project and task management platform** built with **Spring Boot**, **React**, **PostgreSQL**, **Keycloak**, and **Redis**.
+A production-oriented **multi-tenant project and task management platform** built with **Java 17, Spring Boot, React, PostgreSQL, Keycloak, Redis, and Docker Compose**.
 
-The platform supports organization-based tenant isolation, role-based access control, project and task management, optimistic concurrency, idempotent task creation, audit logging, rate limiting, background jobs, caching, health checks, and Docker-based deployment.
+The platform provides organization-based tenant isolation, role-based access control, project and task management, optimistic concurrency control, idempotent task creation, audit logging, Redis-backed rate limiting and caching, background processing, health/readiness checks, and automated testing.
 
-> **Assessment:** The original assignment brief is available in [ASSESSMENT.md](ASSESSMENT.md).
-
----
-
-## Overview
-
-A user authenticates through **Keycloak**, then creates or joins an organization and manages its projects and tasks.
-
-The backend is responsible for enforcing:
-
-* Tenant isolation
-* Role-based access control
-* Authentication and authorization
-* Optimistic concurrency
-* Idempotent task creation
-* Audit logging
-* Rate limiting
-* Organization suspension
-* Background job processing
-* Redis caching
-
-Tenant identity is derived and enforced server-side rather than being trusted from the frontend.
+> **Assessment brief:** [ASSESSMENT.md](ASSESSMENT.md)
 
 ---
 
-## Key Features
+# 1. System Overview
 
-### Authentication & Authorization
+Akeza follows a multi-tenant architecture where users belong to organizations and access to resources is enforced on the server.
+
+```text
+                         ┌─────────────────┐
+                         │    React UI     │
+                         │   Vite + PKCE   │
+                         └────────┬────────┘
+                                  │
+                              HTTP + JWT
+                                  │
+                                  ▼
+                         ┌─────────────────┐
+                         │  Spring Boot    │
+                         │      API        │
+                         │                 │
+                         │ Authentication │
+                         │ RBAC            │
+                         │ Tenant Isolation│
+                         │ Business Logic  │
+                         └───────┬─┬───────┘
+                                 │ │
+                   ┌─────────────┘ └──────────────┐
+                   ▼                              ▼
+           ┌───────────────┐              ┌───────────────┐
+           │  PostgreSQL   │              │     Redis     │
+           │               │              │               │
+           │ Application   │              │ Cache         │
+           │ Data          │              │ Rate Limits   │
+           │ Audit Logs    │              │ Idempotency   │
+           └───────────────┘              └───────────────┘
+
+                         ┌─────────────────┐
+                         │    Keycloak     │
+                         │   OIDC / OAuth2 │
+                         └─────────────────┘
+
+                         ┌─────────────────┐
+                         │ Background      │
+                         │ Worker          │
+                         └─────────────────┘
+```
+
+Detailed architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
+
+---
+
+# 2. Key Features
+
+## Authentication
 
 * Keycloak OIDC/OAuth2 authentication
 * JWT-based API authorization
-* PKCE-based frontend login
-* Platform-level `SUPER_ADMIN`
-* Organization roles:
+* PKCE frontend authentication
+* API does not issue JWTs
+* Server-side authentication and authorization
 
-    * `ORG_ADMIN`
-    * `PROJECT_MANAGER`
-    * `MEMBER`
-* Server-side RBAC enforcement
-* Tenant isolation across organization-scoped resources
+## Multi-Tenancy
 
-### Organizations
+* Organizations act as tenants
+* Organization membership controls access
+* Organization-scoped resources
+* Server-side tenant isolation
+* Client-provided organization IDs are validated against the authenticated user's membership
 
-* Create and join organizations
-* Organization membership management
-* Organization suspension and reactivation
-* Role changes with audit logging
+## RBAC
 
-### Projects & Tasks
+Platform role:
 
-* Project management
-* Project statuses:
+* `SUPER_ADMIN`
 
-    * `ACTIVE`
-    * `ARCHIVED`
-* Task CRUD operations
-* Paginated and filterable task listing
+Organization roles:
+
+* `ORG_ADMIN`
+* `PROJECT_MANAGER`
+* `MEMBER`
+
+Permissions are enforced by the backend.
+
+## Projects & Tasks
+
+* Project CRUD
+* Project statuses: `ACTIVE`, `ARCHIVED`
+* Task CRUD
+* Pagination and filtering
 * Organization-scoped task access
-* Optimistic concurrency using a task `version`
-* Stale updates return HTTP `409 Conflict`
+* Optimistic concurrency control
+* HTTP `409 Conflict` for stale task versions
 
-### Idempotency
+## Idempotency
 
-Task creation supports the `Idempotency-Key` header.
+Task creation supports:
 
-* Prevents duplicate task creation when requests are retried
-* Supports wait-and-replay behavior for concurrent requests
-* Completed idempotency records are retained for 24 hours
-* Stale in-progress requests can be reclaimed
+```http
+Idempotency-Key: <unique-key>
+```
 
-### Audit Logging
+Duplicate retries using the same key replay the original result rather than creating duplicate tasks.
+
+## Audit Logging
 
 * Append-only audit log
 * Organization administrators can search and paginate audit records
 * Role changes are audited
-* Audit records are associated with the relevant organization and actor
+* Audit records include the relevant actor and organization context
 
-### Redis
+## Redis
 
 Redis is used for:
 
-* API rate limiting
 * Dashboard/analytics caching
-* Idempotency coordination where applicable
+* Rate limiting
+* Idempotency coordination
 
-Rate limiting uses Redis Lua scripts and returns HTTP `429 Too Many Requests` when limits are exceeded.
+## Background Worker
 
-### Background Worker
-
-The worker handles background maintenance tasks including:
+The worker performs background maintenance such as:
 
 * Overdue task scanning
 * Failed/dead-letter job inspection
-* Terminal job retention cleanup
+* Terminal job cleanup
 
-Terminal jobs are cleaned up according to configurable retention periods. `PENDING` and `PROCESSING` jobs are never removed by terminal-job cleanup.
+## Health & Readiness
 
-### Health & Readiness
-
-* `GET /health` — liveness
-* `GET /ready` — readiness
-* `/actuator/health/liveness` — Spring Boot liveness endpoint
-
-In production mode, readiness verifies required dependencies including PostgreSQL and Redis.
-
-A failed readiness check returns HTTP `503 Service Unavailable`.
-
-### API Documentation
-
-Swagger/OpenAPI documentation is available through Swagger UI.
-
-Protected API operations still require a valid Keycloak JWT and remain subject to RBAC and tenant-isolation checks.
+* `/health` — liveness
+* `/ready` — readiness
+* `/actuator/health/liveness` — Spring Boot liveness
 
 ---
 
-## Technology Stack
+# 3. Technology Stack
 
-| Component             | Technology                  |
-| --------------------- | --------------------------- |
-| Backend               | Java 17 + Spring Boot 3.3.3 |
-| Frontend              | React 18 + Vite             |
-| Database              | PostgreSQL 17               |
-| Database Migrations   | Flyway                      |
-| Authentication        | Keycloak 24                 |
-| Cache & Rate Limiting | Redis 7                     |
-| Containerization      | Docker + Docker Compose     |
-| API Documentation     | OpenAPI / Swagger           |
-| Testing               | JUnit, H2, Testcontainers   |
-| Build                 | Maven + npm                 |
-
----
-
-## Architecture
-
-The application consists of the following major components:
-
-```text
-                         ┌──────────────────┐
-                         │     React UI     │
-                         │   Vite / PKCE    │
-                         └────────┬─────────┘
-                                  │
-                                  │ HTTP / JWT
-                                  ▼
-                         ┌──────────────────┐
-                         │  Spring Boot API │
-                         │                  │
-                         │ Auth / RBAC      │
-                         │ Tenant Isolation │
-                         │ Projects / Tasks │
-                         │ Audit / Jobs     │
-                         └──────┬─────┬─────┘
-                                │     │
-                  ┌─────────────┘     └─────────────┐
-                  ▼                                 ▼
-          ┌──────────────┐                  ┌──────────────┐
-          │ PostgreSQL   │                  │    Redis     │
-          │              │                  │              │
-          │ Application  │                  │ Cache        │
-          │ Data         │                  │ Rate Limits  │
-          │ Audit Logs   │                  │ Coordination │
-          └──────────────┘                  └──────────────┘
-
-                         ┌──────────────────┐
-                         │     Keycloak     │
-                         │ OIDC / OAuth2    │
-                         └──────────────────┘
-
-                         ┌──────────────────┐
-                         │ Background       │
-                         │ Worker           │
-                         │                  │
-                         │ Jobs / Cleanup   │
-                         └──────────────────┘
-```
-
-For the detailed architecture, see [ARCHITECTURE.md](ARCHITECTURE.md).
+| Component             | Technology                 |
+| --------------------- | -------------------------- |
+| Language              | Java 17                    |
+| Backend               | Spring Boot 3.3.3          |
+| Security              | Spring Security + Keycloak |
+| Authentication        | OIDC / OAuth2              |
+| Frontend              | React 18                   |
+| Frontend Tooling      | Vite                       |
+| Database              | PostgreSQL 17              |
+| Migrations            | Flyway                     |
+| Cache / Rate Limiting | Redis 7                    |
+| API Documentation     | OpenAPI / Swagger          |
+| Testing               | JUnit, H2, Testcontainers  |
+| Build                 | Maven                      |
+| Containers            | Docker                     |
+| Orchestration         | Docker Compose             |
+| CI                    | GitHub Actions             |
 
 ---
 
-## Prerequisites
+# 4. Prerequisites
 
-### Required
+Install:
 
+* Git
 * JDK 17
 * Docker Desktop
-* Git
 
-### Optional — Running the frontend outside Docker
+Node.js 20+ is only required if running the React frontend outside Docker.
 
-* Node.js 20+
-
-Docker Desktop is recommended because it provides the complete application stack, including:
-
-* Spring Boot API
-* React frontend
-* PostgreSQL
-* Redis
-* Keycloak
-* Background worker
+Docker Desktop is the recommended way to run the complete system.
 
 ---
 
-## Installation
+# 5. Quick Start
 
-Clone the repository and enter the project directory:
+## Clone the repository
 
 ```powershell
 git clone <repository-url>
 cd multi-tenant-management
 ```
 
-Create the local environment file:
+## Create the environment file
 
 ```powershell
 copy .env.example .env
 ```
 
-Review `.env` before starting the application.
+Review `.env` if you need to change credentials or configuration.
+
+## Start the complete system
+
+```powershell
+docker compose up --build
+```
+
+Wait until the services are healthy.
+
+Check:
+
+```powershell
+docker compose ps
+```
+
+The expected services are:
+
+```text
+app
+frontend
+postgres
+redis
+keycloak
+worker
+```
 
 ---
 
-# Running with Docker
-
-Docker Compose is the recommended way to run the complete system.
-
-### Start the stack
-
-```powershell
-docker compose up --build
-```
-
-### If you need a clean database
-
-> ⚠️ This deletes the PostgreSQL and Keycloak Docker volumes and therefore removes local application data.
-
-```powershell
-docker compose down -v
-docker compose up --build
-```
-
-### Services
+# 6. Service URLs
 
 | Service         | URL                                   |
 | --------------- | ------------------------------------- |
@@ -253,106 +227,564 @@ docker compose up --build
 | Spring Boot API | http://localhost:8080                 |
 | Swagger UI      | http://localhost:8080/swagger-ui.html |
 | Keycloak        | http://localhost:8081                 |
-| PostgreSQL      | localhost:5432                        |
-| Redis           | localhost:6379                        |
 
-Check service status with:
+PostgreSQL and Redis are also exposed locally:
 
-```powershell
-docker compose ps
+```text
+PostgreSQL: localhost:5432
+Redis:      localhost:6379
 ```
 
 ---
 
-## Demo Credentials
+# 7. Demo Users
 
-The Docker Compose environment includes demo credentials for assessment purposes.
+The Compose environment includes preconfigured Keycloak users so an evaluator can immediately test the application.
 
-### Keycloak Admin
+## Realm
+
+```text
+taskmgr
+```
+
+## Password
+
+```text
+Password123
+```
+
+## Users
+
+| Username | Role              |
+| -------- | ----------------- |
+| `alice`  | Organization user |
+| `bob`    | Organization user |
+| `carol`  | Organization user |
+| `dave`   | Organization user |
+| `erin`   | `SUPER_ADMIN`     |
+
+The exact organization memberships and roles are defined by the imported Keycloak/application seed configuration.
+
+## Keycloak Admin
 
 ```text
 Username: admin
 Password: admin
 ```
 
-These values can be overridden through:
+These credentials are for the local assessment environment only.
+
+> **Security note:** Do not use these credentials on a production or shared deployment. Replace all demo credentials and database defaults before deployment.
+
+---
+
+# 8. How to Log In
+
+## Option A — React UI
+
+Open:
 
 ```text
-KEYCLOAK_ADMIN
-KEYCLOAK_ADMIN_PASSWORD
+http://localhost:8088
 ```
 
-### Demo Users
+Click **Login**.
 
-Realm:
+The application redirects to Keycloak.
+
+Use one of the demo accounts:
 
 ```text
-taskmgr
+Username: alice
+Password: Password123
 ```
 
-Password:
+After successful authentication, Keycloak redirects back to the React application.
+
+The frontend receives the authenticated session/token and uses it when calling the API.
+
+---
+
+## Authentication Flow
 
 ```text
-Password123
+Browser
+   │
+   │ Login
+   ▼
+React
+   │
+   │ OIDC / PKCE
+   ▼
+Keycloak
+   │
+   │ Access Token
+   ▼
+React
+   │
+   │ Authorization: Bearer <JWT>
+   ▼
+Spring Boot API
+   │
+   ├── Validate JWT
+   ├── Identify user
+   ├── Check organization membership
+   └── Check RBAC permissions
 ```
 
-Available demo users:
+The API does not directly handle user passwords.
+
+---
+
+# 9. How to Demonstrate Tenant Isolation
+
+Tenant isolation is enforced by the backend.
+
+The important security rule is:
+
+> A user cannot access another organization's resources simply by changing the organization ID.
+
+## Demonstration
+
+### Step 1 — Login as a user from Organization A
+
+For example:
 
 ```text
 alice
-bob
-carol
-dave
-erin
+Password123
 ```
 
-`erin` is configured as the platform `SUPER_ADMIN`.
+Open the application and identify the organization available to Alice.
 
-> ⚠️ These credentials are **demo/assessment configuration only**. They must not be used on a shared or production deployment. Replace the credentials and database defaults before deployment.
+### Step 2 — Access an organization-scoped resource
 
----
+Use the application's organization context or Swagger.
 
-# Running Without Docker
+For example:
 
-When running the API outside Docker, PostgreSQL, Redis, and Keycloak must already be running.
-
-Start the Spring Boot API:
-
-```powershell
-.\mvnw.cmd spring-boot:run
+```http
+GET /api/tasks
+X-Organization-Id: <organization-A-id>
+Authorization: Bearer <alice-token>
 ```
 
-Then start the frontend:
+The request succeeds because Alice belongs to that organization.
 
-```powershell
-cd frontend
-npm install
-npm run dev
+### Step 3 — Try another organization
+
+Change only:
+
+```http
+X-Organization-Id: <organization-B-id>
 ```
 
-The frontend will be available at:
+while keeping Alice's JWT.
+
+The backend verifies Alice's membership against the requested organization.
+
+The request is rejected because Alice does not belong to Organization B.
+
+### What this demonstrates
 
 ```text
-http://localhost:5173
+JWT identity
+     ↓
+User
+     ↓
+Membership
+     ↓
+Requested organization
+     ↓
+Resource
 ```
 
-The Vite development server proxies `/api` requests to the backend on port `8080`.
+The frontend cannot grant itself access to another tenant.
+
+Tenant isolation is therefore enforced at the API/data-access layer rather than being trusted from the UI.
 
 ---
 
-## Database
+# 10. How to Demonstrate RBAC
 
-With Docker Compose, PostgreSQL is created automatically.
+RBAC controls what an authenticated user is allowed to do.
 
-Without Docker, create the database manually:
+The system has:
+
+```text
+SUPER_ADMIN
+ORG_ADMIN
+PROJECT_MANAGER
+MEMBER
+```
+
+## Demonstration
+
+### Organization administrator
+
+Log in as a user configured with:
+
+```text
+ORG_ADMIN
+```
+
+Demonstrate an organization-management operation such as:
+
+* Managing organization members
+* Changing member roles
+* Viewing/searching organization audit logs
+
+The operation should succeed when the user has the required role.
+
+### Member
+
+Log in as a user configured with:
+
+```text
+MEMBER
+```
+
+Attempt an organization-administration operation.
+
+The backend should reject the request because the user does not have the required role.
+
+### Super administrator
+
+Log in as:
+
+```text
+erin
+Password123
+```
+
+`erin` is configured as the platform-level:
+
+```text
+SUPER_ADMIN
+```
+
+This demonstrates the distinction between platform-level administration and organization-level roles.
+
+### What this demonstrates
+
+RBAC is enforced by the backend:
+
+```text
+Authenticated User
+        ↓
+       Role
+        ↓
+Required Permission
+        ↓
+Allow / Deny
+```
+
+The frontend hiding a button is not considered a security control. The API performs the actual authorization check.
+
+---
+
+# 11. How to Demonstrate 409 Optimistic Concurrency
+
+Tasks use a `version` field to prevent stale updates from overwriting newer changes.
+
+## Demonstration
+
+Use the API or Swagger.
+
+### Step 1 — Read a task
+
+```http
+GET /api/tasks/{taskId}
+```
+
+Suppose the response contains:
+
+```json
+{
+  "id": 10,
+  "title": "Example task",
+  "version": 5
+}
+```
+
+The current version is:
+
+```text
+5
+```
+
+### Step 2 — Update the task
+
+Send an update using:
+
+```json
+{
+  "title": "First update",
+  "version": 5
+}
+```
+
+The update succeeds and the task version becomes:
+
+```text
+6
+```
+
+### Step 3 — Reuse the stale version
+
+Send another update using:
+
+```json
+{
+  "title": "Stale update",
+  "version": 5
+}
+```
+
+The server detects that version `5` is no longer current.
+
+Expected response:
+
+```text
+HTTP 409 Conflict
+```
+
+### What this demonstrates
+
+```text
+Client A reads version 5
+Client B updates → version 6
+Client A updates using version 5
+             ↓
+       409 Conflict
+```
+
+This prevents silent lost updates.
+
+---
+
+# 12. How to Demonstrate Idempotency
+
+Task creation supports an `Idempotency-Key`.
+
+## Demonstration
+
+Send:
+
+```http
+POST /api/tasks
+Idempotency-Key: demo-task-001
+```
+
+with a valid task payload.
+
+The server creates the task.
+
+Now send the **same request again** with the same:
+
+```http
+Idempotency-Key: demo-task-001
+```
+
+The server recognizes that the operation has already been processed.
+
+The second request replays the original result instead of creating another task.
+
+### Verify the behavior
+
+Before:
+
+```text
+Tasks = 10
+```
+
+First request:
+
+```text
+Tasks = 11
+```
+
+Retry with the same idempotency key:
+
+```text
+Tasks = 11
+```
+
+A duplicate task is not created.
+
+### Why this matters
+
+This protects against retries caused by:
+
+* Network failures
+* Client timeouts
+* Browser retries
+* Distributed-system retry behavior
+
+---
+
+# 13. How to Demonstrate Rate Limiting
+
+The task-write endpoints are protected by Redis-backed rate limiting.
+
+The default configuration is:
+
+```text
+30 requests / 60 seconds
+```
+
+Configuration can be changed using:
+
+```text
+RATE_LIMIT_REQUESTS
+RATE_LIMIT_WINDOW_SECONDS
+```
+
+## Demonstration
+
+### Option 1 — Use Swagger
+
+Open:
+
+```text
+http://localhost:8080/swagger-ui.html
+```
+
+Authorize using a valid Keycloak access token.
+
+Repeatedly call a rate-limited task write endpoint within the configured window.
+
+Once the limit is exceeded, the API returns:
+
+```text
+HTTP 429 Too Many Requests
+```
+
+### Option 2 — Temporarily lower the limit
+
+For a quick demonstration, configure:
+
+```text
+RATE_LIMIT_REQUESTS=3
+RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+Restart the stack:
+
+```powershell
+docker compose up --build
+```
+
+Then perform several requests against the protected endpoint.
+
+Expected behavior:
+
+```text
+Request 1 → allowed
+Request 2 → allowed
+Request 3 → allowed
+Request 4 → 429 Too Many Requests
+```
+
+Redis stores the rate-limit state, allowing the counter to be shared across application instances.
+
+---
+
+# 14. How to Check Health & Readiness
+
+The application exposes separate liveness and readiness checks.
+
+## Liveness
+
+Open:
+
+```text
+http://localhost:8080/health
+```
+
+Expected result:
+
+```text
+UP
+```
+
+Spring Boot's liveness endpoint is also available at:
+
+```text
+http://localhost:8080/actuator/health/liveness
+```
+
+Liveness answers:
+
+> Is the application process alive?
+
+---
+
+## Readiness
+
+Open:
+
+```text
+http://localhost:8080/ready
+```
+
+Readiness checks whether required infrastructure is available.
+
+In production configuration this includes:
+
+```text
+Spring Boot API
+      │
+      ├── PostgreSQL ✓
+      │
+      └── Redis ✓
+```
+
+If the application is ready:
+
+```text
+HTTP 200
+```
+
+If required dependencies are unavailable:
+
+```text
+HTTP 503 Service Unavailable
+```
+
+Readiness therefore answers:
+
+> Can this application currently serve normal requests?
+
+---
+
+# 15. Database
+
+PostgreSQL stores the application's persistent data.
+
+The main relational concepts include:
+
+```text
+Organizations
+Members
+Projects
+Tasks
+Audit Logs
+Jobs
+Idempotency Records
+```
+
+The database is initialized and upgraded using Flyway migrations.
+
+Create a database manually when running outside Docker:
 
 ```sql
 CREATE DATABASE tenant_management;
 ```
 
-Flyway automatically applies database migrations when the application starts.
+Flyway automatically applies migrations when the application starts.
 
-Current migrations are located under:
+Migration files are located under:
 
 ```text
 src/main/resources/db/migration/
@@ -360,43 +792,31 @@ src/main/resources/db/migration/
 
 ---
 
-# Environment Variables
+# 16. Redis
 
-Copy `.env.example` to `.env` and configure the environment as required.
+Redis provides fast in-memory storage for temporary and frequently accessed data.
 
-| Variable                      | Purpose                                                        |
-| ----------------------------- | -------------------------------------------------------------- |
-| `DATABASE_URL`                | PostgreSQL JDBC/database URL                                   |
-| `DATABASE_USERNAME`           | PostgreSQL username                                            |
-| `DATABASE_PASSWORD`           | PostgreSQL password                                            |
-| `KEYCLOAK_ISSUER`             | Keycloak JWT issuer                                            |
-| `KEYCLOAK_JWK_SET_URI`        | JWKS endpoint reachable by the API                             |
-| `REDIS_HOST`                  | Redis hostname                                                 |
-| `REDIS_PORT`                  | Redis port                                                     |
-| `KEYCLOAK_ADMIN`              | Keycloak bootstrap administrator                               |
-| `KEYCLOAK_ADMIN_PASSWORD`     | Keycloak bootstrap administrator password                      |
-| `RATE_LIMIT_REQUESTS`         | Maximum requests allowed within the rate-limit window          |
-| `RATE_LIMIT_WINDOW_SECONDS`   | Rate-limit window duration                                     |
-| `ANALYTICS_CACHE_TTL_SECONDS` | Dashboard cache TTL                                            |
-| `IDEMPOTENCY_STALE_SECONDS`   | Time before an incomplete idempotency request can be reclaimed |
-| `IDEMPOTENCY_RETENTION_HOURS` | Completed idempotency-key retention period                     |
-| `JOB_DONE_RETENTION_HOURS`    | Retention period for completed jobs                            |
-| `JOB_FAILED_RETENTION_HOURS`  | Retention period for failed jobs                               |
+Akeza uses Redis for:
 
-Default retention configuration:
+### Caching
 
-```text
-DONE jobs:    24 hours
-FAILED jobs:  168 hours
-```
+Dashboard/analytics responses can be cached to reduce repeated database work.
 
-`PENDING` and `PROCESSING` jobs are excluded from terminal-job cleanup.
+### Rate limiting
+
+Redis maintains request counters for rate-limited operations.
+
+### Idempotency
+
+Redis participates in coordination for idempotent operations.
+
+Redis Lua scripts are used where atomic rate-limit operations are required.
 
 ---
 
-# Authentication
+# 17. Keycloak
 
-Authentication is handled by **Keycloak**.
+Keycloak is the application's identity provider.
 
 The configured realm is:
 
@@ -404,122 +824,29 @@ The configured realm is:
 taskmgr
 ```
 
-The frontend uses the public `task-web` client with PKCE.
+The frontend uses the public:
 
-The API does **not** issue JWT access tokens. It validates tokens issued by Keycloak.
+```text
+task-web
+```
 
-## Development Keycloak Configuration
+client with PKCE.
 
-Docker Compose starts Keycloak using development mode over HTTP.
+The API validates Keycloak-issued JWTs but does not issue tokens itself.
 
-The following are therefore development/assessment settings:
+For local assessment purposes, Keycloak runs in development mode over HTTP.
 
-* HTTP instead of HTTPS
-* Demo users
-* `admin` / `admin`
-* `Password123`
-
-These settings are **not suitable for production**.
-
-A production deployment should use:
+Production deployments should use:
 
 * HTTPS
-* Production Keycloak startup configuration
-* Strong unique credentials
+* Production Keycloak configuration
+* Strong unique secrets
 * Secure secret management
-* Appropriate realm/client configuration
+* Production-grade identity configuration
 
 ---
 
-## Custom Login Theme
-
-A custom `akeza` Keycloak login theme is included at:
-
-```text
-keycloak/themes/akeza
-```
-
-The realm configuration sets:
-
-```text
-loginTheme=akeza
-```
-
-The realm JSON is imported when the realm is initially created.
-
-If the `keycloak_data` volume already contains an imported realm, the existing realm will not automatically receive later theme configuration changes.
-
-To apply the theme manually:
-
-```powershell
-docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
-
-docker compose exec keycloak /opt/keycloak/bin/kcadm.sh update realms/taskmgr -s loginTheme=akeza
-```
-
----
-
-# API Usage
-
-## Tenant Context
-
-Organization-scoped endpoints require:
-
-```http
-X-Organization-Id: <organization-id>
-```
-
-The backend validates that the authenticated user has access to the requested organization.
-
-The frontend cannot grant itself access to another tenant simply by changing the organization ID.
-
----
-
-## Tasks
-
-Tasks can be created using either endpoint:
-
-```http
-POST /api/tasks
-```
-
-or:
-
-```http
-POST /api/projects/{projectId}/tasks
-```
-
-Both require an `Idempotency-Key`.
-
-Example:
-
-```http
-Idempotency-Key: 8c7f0c6d-7b32-4d19-9d9c-example
-```
-
-Task retrieval, update, and deletion are available through:
-
-```http
-/api/tasks/{id}
-```
-
-and the nested project routes where applicable.
-
-### Optimistic Concurrency
-
-Task updates require the current `version` value.
-
-If another request has already modified the task, the submitted version becomes stale and the API returns:
-
-```text
-409 Conflict
-```
-
-This prevents silent overwriting of concurrent changes.
-
----
-
-# Swagger / OpenAPI
+# 18. API Documentation
 
 Swagger UI:
 
@@ -527,25 +854,32 @@ Swagger UI:
 http://localhost:8080/swagger-ui.html
 ```
 
-To test protected operations:
+To test protected endpoints:
 
-1. Obtain a Keycloak access token.
-2. Select **Authorize** in Swagger UI.
-3. Provide the token.
-4. Include `X-Organization-Id` for tenant-scoped endpoints.
-5. Execute the requested API operation.
+1. Log in through Keycloak.
+2. Obtain a valid access token.
+3. Open Swagger UI.
+4. Select **Authorize**.
+5. Provide the token.
+6. Add `X-Organization-Id` to tenant-scoped requests.
+7. Execute the endpoint.
 
-Swagger UI itself is publicly accessible in the local Compose environment so an evaluator can inspect the API schemas without first authenticating through the SPA.
+Swagger being publicly accessible does **not** disable API security.
 
-> Protected API operations still enforce JWT authentication, RBAC, and tenant isolation. Swagger does not bypass security.
+Protected endpoints still enforce:
 
-For production deployments, Swagger should not be publicly exposed without appropriate access controls.
+* JWT validation
+* RBAC
+* Tenant isolation
+* Resource authorization
 
 ---
 
-# Backup & Restore
+# 19. Backup & Restore
 
-PowerShell:
+### PowerShell
+
+Backup:
 
 ```powershell
 .\scripts\backup.ps1
@@ -557,7 +891,9 @@ Restore:
 .\scripts\restore.ps1 -BackupFile .\backups\tenant_management-YYYYMMDD-HHMMSS.sql
 ```
 
-Linux/macOS/Git Bash:
+### Bash
+
+Backup:
 
 ```bash
 ./scripts/backup.sh
@@ -569,21 +905,22 @@ Restore:
 ./scripts/restore.sh backups/tenant_management-YYYYMMDD-HHMMSS.sql
 ```
 
-See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) for backup, restore, and recovery procedures.
+See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) for the complete recovery procedure.
 
 ---
 
-# Testing
+# 20. Testing
 
-Run the complete backend verification suite:
+Run the backend test suite:
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
-The test suite includes coverage for areas such as:
+Tests cover areas including:
 
 * Authentication
+* Authorization
 * Tenant isolation
 * RBAC
 * Organization access
@@ -593,33 +930,30 @@ The test suite includes coverage for areas such as:
 * Redis behavior
 * Integration scenarios
 
-### Test Infrastructure
+### Test infrastructure
 
-Most tests use:
+Most unit/integration tests use:
 
-* H2 for database tests
-* Mock Redis behavior
+* H2
+* Mock Redis
 
 `RedisTtlIntegrationTest` uses embedded Redis.
 
-`PostgresRedisIntegrationTest` uses Testcontainers when a Docker engine is available to the JVM.
+`PostgresRedisIntegrationTest` uses Testcontainers when Docker is available to the JVM.
 
-Keycloak is not started automatically by the test suite.
+Keycloak is not automatically started by the test suite.
 
-### Frontend
-
-Build the production frontend with:
+### Frontend build
 
 ```powershell
 cd frontend
+npm install
 npm run build
 ```
 
-There is currently no frontend unit-test script configured.
-
 ---
 
-# CI/CD
+# 21. CI/CD
 
 GitHub Actions is configured in:
 
@@ -627,17 +961,21 @@ GitHub Actions is configured in:
 .github/workflows/ci.yml
 ```
 
-The pipeline performs:
+The CI pipeline performs:
 
-1. Maven verification
-2. Frontend production build
-3. Docker Compose image build
+```text
+Maven verify
+     ↓
+Frontend production build
+     ↓
+Docker Compose build
+```
 
-The CI workflow currently builds the images but does not push them to a container registry.
+The workflow currently builds the images but does not push them to a container registry.
 
 ---
 
-# Project Structure
+# 22. Project Structure
 
 ```text
 multi-tenant-management/
@@ -654,7 +992,7 @@ multi-tenant-management/
 │   └── src/                       # React application
 │
 ├── keycloak/
-│   ├── realm-taskmgr.json         # Realm configuration
+│   ├── realm-taskmgr.json         # Keycloak realm configuration
 │   └── themes/akeza/              # Custom login theme
 │
 ├── scripts/
@@ -682,9 +1020,7 @@ multi-tenant-management/
 
 ---
 
-# Documentation
-
-Additional project documentation:
+# 23. Additional Documentation
 
 * [Assessment](ASSESSMENT.md)
 * [Architecture](ARCHITECTURE.md)
@@ -696,26 +1032,25 @@ Additional project documentation:
 
 ---
 
-# Deployment
+# 24. Production Considerations
 
-No hosted production URL is currently provided.
+The included Docker Compose environment is designed for local assessment and demonstration.
 
-The application can be deployed using Docker Compose or equivalent infrastructure.
-
-For production deployment:
+Before deploying to a shared or production environment:
 
 * Replace all demo credentials
-* Use strong secrets
+* Replace database default credentials
 * Enable HTTPS
 * Use production Keycloak configuration
-* Protect Swagger/OpenAPI endpoints
-* Use managed or properly secured PostgreSQL and Redis
-* Configure persistent storage and backups
+* Secure Swagger/OpenAPI access
+* Use proper secret management
+* Configure persistent PostgreSQL storage
+* Configure Redis appropriately
+* Configure production backups
 * Review [SECURITY.md](SECURITY.md)
 * Review [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md)
 
 ---
 
-## License
 
-This project was developed as a software engineering assessment project.
+This provides a quick end-to-end demonstration of the platform's core security, reliability, and infrastructure requirements.
