@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.vscode
+target
+*.iml
+*.log
+.env
+application-local.properties
+postman
+README.md
+pg17.log
+**/.DS_Store

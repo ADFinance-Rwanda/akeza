@@ -1,0 +1,151 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tenant_management
+      POSTGRES_USER: ${DATABASE_USERNAME:-tenant}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-tenant}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-tenant} -d tenant_management"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [platform]
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    # Not published on the host. App/worker use the compose network; inspect with
+    # `docker compose exec redis redis-cli`. Host bind of 6379 can fail on Windows
+    # Hyper-V excluded port ranges after a container restart.
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [platform]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:24.0.5
+    restart: unless-stopped
+    command: ["start-dev", "--import-realm", "--http-port=8080"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8081:8080"
+    volumes:
+      - keycloak_data:/opt/keycloak/data
+      - ./keycloak/realm-taskmgr.json:/opt/keycloak/data/import/realm-taskmgr.json:ro
+    networks: [platform]
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DATABASE_URL: jdbc:postgresql://db:5432/tenant_management
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-tenant}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-tenant}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/taskmgr
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/taskmgr/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: task-api
+      SERVER_PORT: 8080
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-30}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      ANALYTICS_CACHE_TTL_SECONDS: ${ANALYTICS_CACHE_TTL_SECONDS:-60}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://localhost:8080/ready"]
+      interval: 15s
+      timeout: 8s
+      retries: 12
+      start_period: 90s
+    networks: [platform]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod,worker
+      DATABASE_URL: jdbc:postgresql://db:5432/tenant_management
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-tenant}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-tenant}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KEYCLOAK_ISSUER: http://localhost:8081/realms/taskmgr
+      KEYCLOAK_JWK_SET_URI: http://keycloak:8080/realms/taskmgr/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: task-api
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-30}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      ANALYTICS_CACHE_TTL_SECONDS: ${ANALYTICS_CACHE_TTL_SECONDS:-60}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://localhost:8080/ready"]
+      interval: 15s
+      timeout: 8s
+      retries: 12
+      start_period: 90s
+    networks: [platform]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    depends_on:
+      app:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /usr/share/nginx/html/index.html"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+    networks: [platform]
+
+networks:
+  platform:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  keycloak_data:
