@@ -1,12 +1,7 @@
-# Copy this file to application-local.properties (gitignored) and fill in real values.
-# The application imports ./application-local.properties automatically if it exists.
-
 DATABASE_URL=jdbc:postgresql://localhost:5432/tenant_management
 DATABASE_USERNAME=postgres
 DATABASE_PASSWORD=change-me
-JWT_SECRET=replace-with-a-long-random-secret-at-least-32-chars
-JWT_EXPIRATION_MS=86400000
+KEYCLOAK_ISSUER=http://localhost:8081/realms/taskmgr
+REDIS_HOST=localhost
+REDIS_PORT=6379
 SERVER_PORT=8080
-
-# Optional local SQL logging:
-# spring.jpa.show-sql=true

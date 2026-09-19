@@ -1,245 +1,141 @@
-# Multi-Tenant Management API
+# Multi-Tenant Task Platform
 
-Spring Boot backend for managing organizations (tenants), users, and tenant memberships with JWT authentication and role-based access control.
+Spring Boot API + React UI for organizations, projects, and tasks. Identity is **Keycloak**. Cache and rate limits use **Redis**. Schema is **Flyway** on **PostgreSQL**.
 
 ## Overview
 
-Authenticated users can register, create tenants, and manage who belongs to each tenant. Access is isolated: a user only sees tenants they belong to, and membership roles (`OWNER`, `ADMIN`, `MEMBER`) control who can change tenant data or memberships.
-
-This is a REST API only. There is no frontend in this project.
+A user signs in with Keycloak, creates or joins an organization, then manages projects and tasks. The server enforces tenant isolation and RBAC. Task creates are idempotent. Task updates require a `version` field (HTTP 409 on stale data).
 
 ## Features
 
-- User registration and login with JWT Bearer tokens
-- Passwords stored with BCrypt (never returned in API responses)
-- Tenant CRUD (create, list, get, update, delete)
-- User profile CRUD, scoped to the current user and people who share a tenant
-- Membership management (add, list, change role, remove)
-- Role checks: owner/admin manage members; only owners update or delete a tenant
-- Last-owner protection (cannot remove, demote, or delete the only owner)
-- Duplicate email and tenant slug rejected with HTTP 409
-- Consistent JSON error responses (400, 401, 403, 404, 409, 500)
-- OpenAPI/Swagger UI for exploring and calling the API
-- Health endpoint at `/actuator/health`
-- Docker Compose stack (application + PostgreSQL)
-- GitHub Actions CI (`mvn clean verify`)
+- Keycloak OIDC login (`/api/me`)
+- Organizations, memberships (`ORG_ADMIN` / `PROJECT_MANAGER` / `MEMBER`) plus platform `SUPER_ADMIN`
+- Projects (status `ACTIVE`/`ARCHIVED`) and paginated/filterable tasks (`GET /api/tasks`)
+- Projects and paginated/filterable tasks
+- Optimistic locking on tasks
+- `Idempotency-Key` on task create (wait-and-replay; 24h retention)
+- Append-only audit log (ORG_ADMIN read; role changes audited)
+- Redis Lua rate limits (429) and dashboard cache TTL
+- Background worker: overdue scan + FAILED dead-letter inspect
+- Organization suspend/reactivate
+- Liveness: `GET /health` (also `/actuator/health/liveness`)
+- Readiness: `GET /ready` (Postgres + Redis in prod; Compose healthcheck; 3s timeout → 503)
+- Swagger UI
 
 ## Technology Stack
 
-- Java 17
-- Spring Boot 3.3.3
-- Spring Web, Spring Data JPA, Spring Validation, Spring Security, Spring Boot Actuator
-- PostgreSQL 17 (runtime and Docker)
-- H2 (tests only)
-- JJWT 0.12.6 (HS256)
-- springdoc-openapi 2.6.0
-- Lombok
-- Maven Wrapper
-- Docker / Docker Compose
+Java 17, Spring Boot 3.3.3, PostgreSQL 17, Keycloak 24, Redis 7, Flyway, React 18 + Vite, Docker Compose.
 
 ## Architecture
 
-```text
-Controller  →  Service  →  Repository  →  PostgreSQL
-```
-
-Business rules live in services (`AuthService`, `TenantService`, `UserService`, `MembershipService`, `AccessService`). Controllers validate HTTP input and return DTOs. JPA entities are not exposed as API payloads.
+See `ARCHITECTURE.md`.
 
 ## Prerequisites
 
-- JDK 17+
-- Maven 3.9+ (or use `mvnw` / `mvnw.cmd` in this repo)
-- PostgreSQL 12+ if running without Docker (developed against PostgreSQL 17)
-- Docker Desktop if running with Docker Compose
+JDK 17, Docker Desktop (for the full stack), Node 20 if running the UI outside Docker.
 
 ## Database Setup
 
-Create an empty database when running without Docker:
+Compose creates the database. Without Docker:
 
 ```sql
 CREATE DATABASE tenant_management;
 ```
 
-Tables (`tenants`, `users`, `memberships`) are created or updated automatically on startup (`spring.jpa.hibernate.ddl-auto=update`).
-
-Relationships:
-
-- A tenant has many memberships
-- A user has many memberships
-- A membership belongs to one tenant and one user (`OWNER` | `ADMIN` | `MEMBER`)
-- Unique: `tenants.slug`, `users.email`, (`memberships.tenant_id`, `memberships.user_id`)
-- Index: `memberships.user_id` (membership lookup by user)
-
-If PostgreSQL 10 already occupies port `5432` on Windows, run PostgreSQL 17 on another port (this project used `5433` locally) and set `DATABASE_URL` accordingly.
-
-Docker Compose starts its own PostgreSQL and does not use the host database.
+Flyway runs `V1__init.sql` on startup.
 
 ## Environment Variables
 
-Copy the example file and edit values. Do not commit real passwords.
+Copy `.env.example` to `.env` for Compose. Local API without Compose: `application-local.properties.example` → `application-local.properties`.
 
-```text
-application-local.properties.example  →  application-local.properties
-```
-
-For Docker Compose, copy `.env.example` to `.env` if you want to override the local defaults.
-
-`application-local.properties` and `.env` are gitignored.
-
-| Variable | Required locally | Docker default | Purpose |
-| --- | --- | --- | --- |
-| `DATABASE_URL` | No (`jdbc:postgresql://localhost:5432/tenant_management`) | `jdbc:postgresql://db:5432/tenant_management` | JDBC URL |
-| `DATABASE_USERNAME` | No (`postgres`) | `tenant` | Database user |
-| `DATABASE_PASSWORD` | **Yes** (no default) | `tenant` (local Compose only) | Database password |
-| `JWT_SECRET` | **Yes** (no default, ≥ 32 characters) | local Compose placeholder | HMAC signing secret |
-| `JWT_EXPIRATION_MS` | No | `86400000` (24h) | Access token lifetime |
-| `SERVER_PORT` | No | `8080` | Host HTTP port |
-
-Production deployments must set `DATABASE_PASSWORD` and `JWT_SECRET` to strong unique values. Do not use the Compose placeholders outside local development.
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` / `DATABASE_USERNAME` / `DATABASE_PASSWORD` | Postgres |
+| `KEYCLOAK_ISSUER` | JWT issuer, e.g. `http://localhost:8081/realms/taskmgr` |
+| `KEYCLOAK_JWK_SET_URI` | JWKS URL reachable from the API container |
+| `REDIS_HOST` / `REDIS_PORT` | Redis (Compose keeps Redis on the internal network; `docker compose exec redis redis-cli`) |
+| `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` | Keycloak bootstrap admin |
+| `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | Task write limiter (default 30 / 60s) |
+| `ANALYTICS_CACHE_TTL_SECONDS` | Dashboard Redis TTL (default 60) |
+| `IDEMPOTENCY_STALE_SECONDS` / `IDEMPOTENCY_RETENTION_HOURS` | In-progress reclaim / completed key purge |
 
 ## Local Installation
 
 ```powershell
-git clone <repository-url>
 cd multi-tenant-management
-copy application-local.properties.example application-local.properties
+copy .env.example .env
 ```
-
-Edit `application-local.properties` with your PostgreSQL password and a long JWT secret.
 
 ## Running Without Docker
 
+Start Postgres, Redis, and Keycloak yourself, then:
+
 ```powershell
 .\mvnw.cmd spring-boot:run
+cd frontend
+npm install
+npm run dev
 ```
 
-The API listens on `http://localhost:8080`.
-
-Health: [http://localhost:8080/actuator/health](http://localhost:8080/actuator/health)
+UI: `http://localhost:5173` (proxies `/api` to `:8080`).
 
 ## Running With Docker
 
-Docker Desktop must be running.
+If you previously ran the old app+Postgres-only stack, reset the volume (this deletes data):
 
 ```powershell
-copy .env.example .env
-docker compose build
-docker compose up
+docker compose down -v
+docker compose up --build
 ```
 
-Compose starts PostgreSQL and the Spring Boot app on the `tenant-net` network. The database port is not published on the host; the API is at `http://localhost:8080`.
+- API: http://localhost:8080
+- Swagger: http://localhost:8080/swagger-ui.html
+- UI: http://localhost:8088
+- Keycloak: http://localhost:8081 — **local demo only** (`admin` / `admin` unless you override `KEYCLOAK_ADMIN` / `KEYCLOAK_ADMIN_PASSWORD` in `.env`)
+- Demo users (realm `taskmgr`, password `Password123`): `alice`, `bob`, `carol`, `dave`, `erin` (`SUPER_ADMIN`). These credentials exist so an evaluator can log in without extra setup. They are **not** production secrets; replace them and the Compose database fallbacks (`tenant` / `tenant`) before any shared or production host.
 
-Stop:
+## Backup / restore
 
 ```powershell
-docker compose down
+.\scripts\backup.ps1
+.\scripts\restore.ps1 -BackupFile .\backups\tenant_management-YYYYMMDD-HHMMSS.sql
 ```
 
-Data is kept in the `postgres_data` volume. Add `-v` to `docker compose down` only if you want to delete that volume.
+```bash
+./scripts/backup.sh
+./scripts/restore.sh backups/tenant_management-YYYYMMDD-HHMMSS.sql
+```
+
+See `DISASTER_RECOVERY.md`.
 
 ## API Documentation
 
-After the application is running:
+Authorize Swagger with a Keycloak access token. Tenant-scoped routes need header `X-Organization-Id`. Task create: `POST /api/tasks` (JSON `projectId`) or nested `POST /api/projects/{id}/tasks`, both with `Idempotency-Key`. Task get/update/delete: `/api/tasks/{id}` or nested `/api/projects/{id}/tasks/{taskId}`. Task PUT needs `version`.
 
-- Swagger UI: [http://localhost:8080/swagger-ui.html](http://localhost:8080/swagger-ui.html)
-- OpenAPI JSON: [http://localhost:8080/v3/api-docs](http://localhost:8080/v3/api-docs)
-
-Register or log in first, then click **Authorize** in Swagger and paste the JWT (without the `Bearer ` prefix).
-
-Import `postman/Multi-Tenant-Management.postman_collection.json` for the same flows. Register and Login save `{{token}}` for later requests.
+Swagger UI (`/swagger-ui.html`) is public on this local Compose API so an assessor can browse schemas without a SPA session. Calling a protected operation still requires a valid JWT; Swagger does not bypass RBAC or tenant checks. Do not expose Swagger on a production internet deployment without authentication.
 
 ## Authentication
 
-Public:
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
-- `GET /actuator/health`
-- Swagger / OpenAPI
-
-All other `/api/**` routes require:
-
-```http
-Authorization: Bearer <accessToken>
-```
-
-Tenant roles (stored on memberships, not on the JWT):
-
-| Action | OWNER | ADMIN | MEMBER |
-| --- | --- | --- | --- |
-| View tenant and members | yes | yes | yes |
-| Add/update/remove members | yes | yes (cannot assign or manage OWNER) | no |
-| Update or delete tenant | yes | no | no |
-
-Users can update or delete only their own account. Listing users returns the current user plus users who share at least one tenant.
+Keycloak realm `taskmgr`, client `task-web`. The API never issues JWTs.
 
 ## Testing
-
-Tests use an in-memory H2 database and do not need PostgreSQL or Docker.
-
-```powershell
-.\mvnw.cmd test
-```
-
-Full build (compile + tests):
 
 ```powershell
 .\mvnw.cmd clean verify
 ```
 
+Tests use H2 + a mock Redis client by default. `RedisTtlIntegrationTest` starts embedded Redis. `PostgresRedisIntegrationTest` uses Testcontainers when a Docker engine is visible to the JVM. On this Windows Docker Desktop host the Java client hits the Desktop CLI npipe (`Status 400`) and the test is skipped; `docker compose` still works. They do not start Keycloak.
+
+Frontend: `npm run build` (no unit test script).
+
 ## CI/CD
 
-GitHub Actions workflow: `.github/workflows/ci.yml`
-
-On push or pull request to `main`/`master` it:
-
-1. Checks out the repository
-2. Sets up Temurin JDK 17
-3. Caches Maven dependencies
-4. Runs `./mvnw -B clean verify`
-
-The workflow fails if tests fail. There is no automated production deploy in this repository.
+`.github/workflows/ci.yml` runs Maven verify, the frontend production build, and `docker compose build` (images are not pushed).
 
 ## Deployment
 
-This assessment backend is packaged as a Docker image (`Dockerfile`) and can be deployed to any host that can run the image and a PostgreSQL instance.
-
-Required production environment variables:
-
-- `DATABASE_URL`
-- `DATABASE_USERNAME`
-- `DATABASE_PASSWORD`
-- `JWT_SECRET`
-
-Set `SPRING_PROFILES_ACTIVE=prod` in production. Do not commit production secrets.
-
-A live hosted URL is not included in this repository. Deploy from the Docker image to the platform required by your environment.
+No hosted URL is provided. Deploy the Compose services or equivalent with real secrets.
 
 ## Project Structure
 
-```text
-multi-tenant-management/
-├── pom.xml
-├── mvnw / mvnw.cmd
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── application-local.properties.example
-├── .github/workflows/ci.yml
-├── postman/Multi-Tenant-Management.postman_collection.json
-└── src/
-    ├── main/java/com/tenant/management/
-    │   ├── TenantManagementApplication.java
-    │   ├── config/          # Security + OpenAPI
-    │   ├── controller/      # Auth, Tenant, User
-    │   ├── dto/
-    │   ├── entity/
-    │   ├── exception/
-    │   ├── repository/
-    │   ├── security/        # JWT filter, JwtService, UserPrincipal
-    │   └── service/
-    ├── main/resources/
-    │   ├── application.properties
-    │   └── application-prod.properties
-    └── test/java/com/tenant/management/
-```
+See `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, `DISASTER_RECOVERY.md`, `AI_USAGE.md`, and `docs/adr/`.

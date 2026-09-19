@@ -21,16 +21,19 @@ import java.time.LocalDateTime;
 public class RestAuthExceptionHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
     private final ObjectMapper objectMapper;
+    private final SecurityEventLogger securityEventLogger;
 
     @Override
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException)
             throws IOException {
+        securityEventLogger.authenticationFailure(authException.getClass().getSimpleName());
         write(response, HttpStatus.UNAUTHORIZED, "Unauthorized");
     }
 
     @Override
     public void handle(HttpServletRequest request, HttpServletResponse response, AccessDeniedException accessDeniedException)
             throws IOException {
+        securityEventLogger.authorizationFailure(accessDeniedException.getClass().getSimpleName());
         write(response, HttpStatus.FORBIDDEN, "Forbidden");
     }
 

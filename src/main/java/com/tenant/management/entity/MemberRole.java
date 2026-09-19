@@ -1,7 +1,7 @@
 package com.tenant.management.entity;
 
 public enum MemberRole {
-    OWNER,
-    ADMIN,
+    ORG_ADMIN,
+    PROJECT_MANAGER,
     MEMBER
 }

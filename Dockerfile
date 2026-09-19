@@ -24,7 +24,7 @@ RUN chown app:app app.jar
 USER app
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
-    CMD curl -fsS http://localhost:8080/actuator/health || exit 1
+HEALTHCHECK --interval=30s --timeout=8s --start-period=60s --retries=5 \
+    CMD curl -fsS --max-time 5 http://localhost:8080/ready || exit 1
 
 ENTRYPOINT ["java", "-jar", "app.jar"]

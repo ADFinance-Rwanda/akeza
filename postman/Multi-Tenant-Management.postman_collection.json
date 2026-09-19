@@ -1,63 +1,46 @@
 {
   "info": {
     "_postman_id": "a7c3e1b0-4d2f-4c8a-9f11-multi-tenant-api",
-    "name": "ASSESSMENT API",
-    "description": "Multi-tenant management backend. Run Register or Login first so {{token}} is set for protected requests.",
+    "name": "Multi-Tenant Task Platform",
+    "description": "Keycloak password-grant demo collection. There is no /api/auth/login. Get Token, then Me, then create org/project/task.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "keycloakUrl", "value": "http://localhost:8081" },
     { "key": "token", "value": "" },
-    { "key": "tenantId", "value": "1" },
-    { "key": "userId", "value": "1" },
-    { "key": "memberUserId", "value": "2" }
+    { "key": "organizationId", "value": "1" },
+    { "key": "projectId", "value": "1" },
+    { "key": "taskId", "value": "1" },
+    { "key": "taskVersion", "value": "0" }
   ],
   "item": [
     {
       "name": "Health",
       "item": [
         {
-          "name": "Health Check",
+          "name": "Liveness",
           "request": {
             "method": "GET",
             "header": [],
-            "url": "{{baseUrl}}/actuator/health"
+            "url": "{{baseUrl}}/actuator/health/liveness"
+          }
+        },
+        {
+          "name": "Readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/actuator/health/readiness"
           }
         }
       ]
     },
     {
-      "name": "Authentication",
+      "name": "Keycloak",
       "item": [
         {
-          "name": "Register",
-          "event": [
-            {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "if (pm.response.code === 201) {",
-                  "  const json = pm.response.json();",
-                  "  pm.collectionVariables.set('token', json.accessToken);",
-                  "  if (json.user && json.user.id) { pm.collectionVariables.set('userId', String(json.user.id)); }",
-                  "}"
-                ]
-              }
-            }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Ada\",\n  \"lastName\": \"Lovelace\",\n  \"email\": \"ada@example.com\",\n  \"password\": \"Password123\"\n}"
-            },
-            "url": "{{baseUrl}}/api/auth/register"
-          }
-        },
-        {
-          "name": "Login",
+          "name": "Get Token (alice)",
           "event": [
             {
               "listen": "test",
@@ -66,8 +49,7 @@
                 "exec": [
                   "if (pm.response.code === 200) {",
                   "  const json = pm.response.json();",
-                  "  pm.collectionVariables.set('token', json.accessToken);",
-                  "  if (json.user && json.user.id) { pm.collectionVariables.set('userId', String(json.user.id)); }",
+                  "  pm.collectionVariables.set('token', json.access_token);",
                   "}"
                 ]
               }
@@ -75,33 +57,39 @@
           ],
           "request": {
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [{ "key": "Content-Type", "value": "application/x-www-form-urlencoded" }],
             "body": {
-              "mode": "raw",
-              "raw": "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"Password123\"\n}"
+              "mode": "urlencoded",
+              "urlencoded": [
+                { "key": "grant_type", "value": "password" },
+                { "key": "client_id", "value": "task-web" },
+                { "key": "username", "value": "alice" },
+                { "key": "password", "value": "Password123" }
+              ]
             },
-            "url": "{{baseUrl}}/api/auth/login"
+            "url": "{{keycloakUrl}}/realms/taskmgr/protocol/openid-connect/token"
           }
-        },
+        }
+      ]
+    },
+    {
+      "name": "Identity",
+      "item": [
         {
           "name": "Me",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/auth/me"
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/me"
           }
         }
       ]
     },
     {
-      "name": "Tenants",
+      "name": "Organizations",
       "item": [
         {
-          "name": "Create",
+          "name": "Create organization",
           "event": [
             {
               "listen": "test",
@@ -109,85 +97,51 @@
                 "type": "text/javascript",
                 "exec": [
                   "if (pm.response.code === 201) {",
-                  "  pm.collectionVariables.set('tenantId', String(pm.response.json().id));",
+                  "  pm.collectionVariables.set('organizationId', String(pm.response.json().id));",
                   "}"
                 ]
               }
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Corp\",\n  \"slug\": \"acme-corp\",\n  \"description\": \"Primary tenant\"\n}"
+              "raw": "{\n  \"name\": \"Acme\",\n  \"slug\": \"acme\"\n}"
             },
-            "url": "{{baseUrl}}/api/tenants"
+            "url": "{{baseUrl}}/api/organizations"
           }
         },
         {
-          "name": "Get All",
+          "name": "List members",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/tenants"
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/members"
           }
         },
         {
-          "name": "Get One",
+          "name": "Audit logs",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}"
-          }
-        },
-        {
-          "name": "Update",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Acme Updated\",\n  \"status\": \"ACTIVE\"\n}"
-            },
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}"
-          }
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}"
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
+            "url": "{{baseUrl}}/api/organizations/{{organizationId}}/audit-logs?page=0&size=20"
           }
         }
       ]
     },
     {
-      "name": "Users",
+      "name": "Work",
       "item": [
         {
-          "name": "Create",
+          "name": "Create project",
           "event": [
             {
               "listen": "test",
@@ -195,149 +149,94 @@
                 "type": "text/javascript",
                 "exec": [
                   "if (pm.response.code === 201) {",
-                  "  pm.collectionVariables.set('memberUserId', String(pm.response.json().id));",
+                  "  pm.collectionVariables.set('projectId', String(pm.response.json().id));",
                   "}"
                 ]
               }
             }
           ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Grace\",\n  \"lastName\": \"Hopper\",\n  \"email\": \"grace@example.com\",\n  \"password\": \"Password123\"\n}"
+              "raw": "{\n  \"name\": \"Website\"\n}"
             },
-            "url": "{{baseUrl}}/api/users"
+            "url": "{{baseUrl}}/api/projects"
           }
         },
         {
-          "name": "Get All",
+          "name": "Create task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "  const json = pm.response.json();",
+                  "  pm.collectionVariables.set('taskId', String(json.id));",
+                  "  pm.collectionVariables.set('taskVersion', String(json.version));",
+                  "}"
+                ]
+              }
+            }
+          ],
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/users"
-          }
-        },
-        {
-          "name": "Get One",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/users/{{userId}}"
-          }
-        },
-        {
-          "name": "Update",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"firstName\": \"Ada Updated\"\n}"
-            },
-            "url": "{{baseUrl}}/api/users/{{userId}}"
-          }
-        },
-        {
-          "name": "Delete",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/api/users/{{userId}}"
-          }
-        },
-        {
-          "name": "Get User Tenants",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/users/{{userId}}/tenants"
-          }
-        }
-      ]
-    },
-    {
-      "name": "Memberships",
-      "item": [
-        {
-          "name": "Add Member",
-          "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" },
+              { "key": "Idempotency-Key", "value": "{{$guid}}" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"userId\": {{memberUserId}},\n  \"role\": \"MEMBER\"\n}"
+              "raw": "{\n  \"title\": \"First task\"\n}"
             },
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}/members"
+            "url": "{{baseUrl}}/api/projects/{{projectId}}/tasks"
           }
         },
         {
-          "name": "List Members",
+          "name": "List tasks",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "GET",
-            "header": [],
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}/members"
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
+            "url": "{{baseUrl}}/api/projects/{{projectId}}/tasks?page=0&size=20"
           }
         },
         {
-          "name": "Update Member Role",
+          "name": "Update task",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
             "method": "PUT",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"role\": \"ADMIN\"\n}"
+              "raw": "{\n  \"status\": \"IN_PROGRESS\",\n  \"version\": {{taskVersion}}\n}"
             },
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}/members/{{memberUserId}}"
+            "url": "{{baseUrl}}/api/projects/{{projectId}}/tasks/{{taskId}}"
           }
         },
         {
-          "name": "Remove Member",
+          "name": "Dashboard",
           "request": {
-            "auth": {
-              "type": "bearer",
-              "bearer": [{ "key": "token", "value": "{{token}}", "type": "string" }]
-            },
-            "method": "DELETE",
-            "header": [],
-            "url": "{{baseUrl}}/api/tenants/{{tenantId}}/members/{{memberUserId}}"
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Organization-Id", "value": "{{organizationId}}" }
+            ],
+            "url": "{{baseUrl}}/api/analytics/dashboard"
           }
         }
       ]

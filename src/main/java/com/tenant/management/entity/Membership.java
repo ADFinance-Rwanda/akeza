@@ -1,19 +1,18 @@
 package com.tenant.management.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(
         name = "memberships",
-        uniqueConstraints = @UniqueConstraint(name = "uk_membership_tenant_user", columnNames = {"tenant_id", "user_id"}),
-        indexes = @Index(name = "idx_memberships_user_id", columnList = "user_id")
+        uniqueConstraints = @UniqueConstraint(name = "uk_membership_org_user", columnNames = {"organization_id", "user_id"}),
+        indexes = {
+                @Index(name = "idx_memberships_user_id", columnList = "user_id"),
+                @Index(name = "idx_memberships_org_id", columnList = "organization_id")
+        }
 )
 @Getter
 @Setter
@@ -27,8 +26,8 @@ public class Membership {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "tenant_id", nullable = false)
-    private Tenant tenant;
+    @JoinColumn(name = "organization_id", nullable = false)
+    private Organization organization;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "user_id", nullable = false)
@@ -47,12 +46,12 @@ public class Membership {
     @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now();
-        this.createdAt = now;
-        this.updatedAt = now;
+        createdAt = now;
+        updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
     }
 }
