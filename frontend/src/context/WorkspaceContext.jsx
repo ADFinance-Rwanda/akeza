@@ -98,6 +98,11 @@ export function WorkspaceProvider({ children }) {
     return String(task.createdByUserId) === String(me?.user?.id)
   }
 
+  const canDeleteTask = (task) => {
+    if (!task) return false
+    return Boolean(me?.superAdmin || role === 'ORG_ADMIN' || role === 'PROJECT_MANAGER')
+  }
+
   const value = {
     me,
     orgId,
@@ -111,6 +116,7 @@ export function WorkspaceProvider({ children }) {
     canManageProjects,
     canWriteTasks,
     canEditTask,
+    canDeleteTask,
     loading,
     workspaceLoading,
     bootError,

@@ -176,7 +176,23 @@ class SecurityAttackTest {
                         .header("Idempotency-Key", "dave-create")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"title\":\"dave task\"}"))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated())
+                .andReturn();
+        long daveTask = objectMapper.readTree(
+                mockMvc.perform(get("/api/tasks")
+                                .header("Authorization", bearer(TestJwtSupport.dave()))
+                                .header("X-Organization-Id", orgA)
+                                .param("q", "dave task"))
+                        .andExpect(status().isOk())
+                        .andReturn()
+                        .getResponse()
+                        .getContentAsString()
+        ).get("content").get(0).get("id").asLong();
+        mockMvc.perform(delete("/api/tasks/" + daveTask)
+                        .header("Authorization", bearer(TestJwtSupport.dave()))
+                        .header("X-Organization-Id", orgA))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Members cannot delete tasks"));
         mockMvc.perform(post("/api/projects")
                         .header("Authorization", bearer(TestJwtSupport.dave()))
                         .header("X-Organization-Id", orgA)

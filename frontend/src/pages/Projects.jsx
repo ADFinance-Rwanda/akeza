@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { NeedOrg } from '../components/Guards.jsx'
 import { Badge, EmptyState, Field, Modal } from '../components/Common.jsx'
@@ -8,29 +8,13 @@ import { api, userMessage } from '../services/api.js'
 import { formatDate } from '../utils/format.js'
 
 export default function Projects() {
-  const { orgId, projects, canManageProjects, refreshWorkspace, toast, notifyError } = useWorkspace()
-  const [counts, setCounts] = useState({})
+  const { orgId, projects, canManageProjects, refreshWorkspace, toast } = useWorkspace()
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
-
-  useEffect(() => {
-    if (!orgId || !projects.length) {
-      setCounts({})
-      return
-    }
-    let cancelled = false
-    Promise.all(projects.map(async (p) => {
-      const page = await api.tasks.list(orgId, { projectId: p.id, size: 1, page: 0 })
-      return [p.id, page.totalElements]
-    })).then((entries) => {
-      if (!cancelled) setCounts(Object.fromEntries(entries))
-    }).catch(notifyError)
-    return () => { cancelled = true }
-  }, [orgId, projects, notifyError])
 
   async function createProject(e) {
     e.preventDefault()
@@ -83,13 +67,13 @@ export default function Projects() {
               className="card project-card"
               onClick={() => navigate(`/projects/${project.id}`)}
             >
-              <div className="row-actions" style={{ justifyContent: 'space-between' }}>
+              <div className="project-card-head">
                 <h3>{project.name}</h3>
                 <Badge kind="status" value={project.status} />
               </div>
               <p className="muted">{project.description || 'No description'}</p>
               <div className="stats-inline">
-                <span><strong>{counts[project.id] ?? '—'}</strong> tasks</span>
+                <span><strong>{project.taskCount ?? 0}</strong> tasks</span>
                 <span>Created {formatDate(project.createdAt)}</span>
               </div>
             </button>

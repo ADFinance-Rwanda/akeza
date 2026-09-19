@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,8 +31,13 @@ public class ProjectService {
     @Transactional(readOnly = true)
     public List<ProjectResponse> list() {
         Long orgId = accessService.currentOrganizationId();
+        Map<Long, Long> counts = projectRepository.countTasksByProject(orgId).stream()
+                .collect(Collectors.toMap(
+                        row -> ((Number) row[0]).longValue(),
+                        row -> ((Number) row[1]).longValue()
+                ));
         return projectRepository.findAllByOrganizationIdOrderByCreatedAtDesc(orgId).stream()
-                .map(ProjectResponse::from)
+                .map(project -> ProjectResponse.from(project, counts.getOrDefault(project.getId(), 0L)))
                 .toList();
     }
 

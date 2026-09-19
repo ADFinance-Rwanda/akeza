@@ -177,7 +177,7 @@ public class TaskService {
     public void delete(Long projectId, Long taskId) {
         Long orgId = accessService.currentOrganizationId();
         Task task = getInProject(projectId, taskId);
-        requireCanWrite(task);
+        requireCanDelete(task);
         taskRepository.delete(task);
         auditService.record(orgId, accessService.currentUserId(), "TASK_DELETED", "Task", taskId, null);
         analyticsService.evict(orgId);
@@ -203,6 +203,15 @@ public class TaskService {
         if (!accessService.currentUserId().equals(creatorId)) {
             throw new ForbiddenException("You can only modify your own tasks");
         }
+    }
+
+    private void requireCanDelete(Task task) {
+        Long orgId = accessService.currentOrganizationId();
+        MemberRole role = accessService.currentRole(orgId);
+        if (role == MemberRole.ORG_ADMIN || role == MemberRole.PROJECT_MANAGER) {
+            return;
+        }
+        throw new ForbiddenException("Members cannot delete tasks");
     }
 
     private Task getInOrg(Long taskId) {

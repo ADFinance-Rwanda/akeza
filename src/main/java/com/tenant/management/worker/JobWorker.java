@@ -17,7 +17,11 @@ public class JobWorker {
 
     @Scheduled(fixedDelay = 2000)
     public void poll() {
-        jobService.enqueueOverdueScan();
         jobProcessor.processDue();
+    }
+
+    @Scheduled(fixedDelay = 60000, initialDelay = 5000)
+    public void enqueueOverdue() {
+        jobService.enqueueOverdueScan();
     }
 }

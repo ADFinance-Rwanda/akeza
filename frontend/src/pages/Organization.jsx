@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Badge, ConfirmDialog, EmptyState, Field, Modal } from '../components/Common.jsx'
 import { useWorkspace } from '../context/WorkspaceContext.jsx'
@@ -6,7 +6,7 @@ import { api, userMessage } from '../services/api.js'
 import { formatDate } from '../utils/format.js'
 
 export default function OrganizationPage() {
-  const { orgId, organization, members, projects, me, canAdminOrg, refreshMe, selectOrg, toast, notifyError } = useWorkspace()
+  const { orgId, organization, members, projects, me, canAdminOrg, refreshMe, refreshWorkspace, selectOrg, toast, notifyError } = useWorkspace()
   const [creating, setCreating] = useState(!orgId)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
@@ -14,14 +14,7 @@ export default function OrganizationPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [confirmStatus, setConfirmStatus] = useState('')
-  const [taskCount, setTaskCount] = useState(null)
-
-  useEffect(() => {
-    if (!orgId) return
-    api.tasks.list(orgId, { size: 1, page: 0 })
-      .then((res) => setTaskCount(res.totalElements))
-      .catch(notifyError)
-  }, [orgId, notifyError])
+  const taskCount = projects.reduce((sum, project) => sum + (project.taskCount || 0), 0)
 
   async function createOrg(e) {
     e.preventDefault()
@@ -87,7 +80,7 @@ export default function OrganizationPage() {
               <dt>Created date</dt><dd>{formatDate(organization.createdAt)}</dd>
               <dt>Members</dt><dd>{members.length}</dd>
               <dt>Projects</dt><dd>{projects.length}</dd>
-              <dt>Tasks</dt><dd>{taskCount ?? '—'}</dd>
+              <dt>Tasks</dt><dd>{taskCount}</dd>
             </dl>
             {canAdminOrg && (
               <div className="row-actions" style={{ marginTop: 16 }}>
@@ -101,10 +94,10 @@ export default function OrganizationPage() {
             <h2 className="section-title">Quick links</h2>
             <p className="muted">Signed in as {me?.user?.email}</p>
             <div className="row-actions" style={{ marginTop: 12, flexWrap: 'wrap' }}>
-              <Link to="/team" className="btn btn-secondary" style={{ textDecoration: 'none' }}>Team</Link>
-              <Link to="/projects" className="btn btn-secondary" style={{ textDecoration: 'none' }}>Projects</Link>
-              {canAdminOrg && <Link to="/audit" className="btn btn-secondary" style={{ textDecoration: 'none' }}>Audit logs</Link>}
-              {canAdminOrg && <Link to="/admin" className="btn btn-secondary" style={{ textDecoration: 'none' }}>Administration</Link>}
+              <Link to="/team" className="btn btn-secondary">Team</Link>
+              <Link to="/projects" className="btn btn-secondary">Projects</Link>
+              {canAdminOrg && <Link to="/audit" className="btn btn-secondary">Audit logs</Link>}
+              {canAdminOrg && <Link to="/admin" className="btn btn-secondary">Administration</Link>}
             </div>
           </section>
         </div>

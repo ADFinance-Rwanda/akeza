@@ -8,7 +8,7 @@ Cursor Grok 4.6 was used to implement, audit, and prepare this assessment projec
 - Redis cache/rate-limit, Postgres-backed worker, React + keycloak-js UI
 - Docker Compose, CI workflow, backup/restore scripts, ADRs, and assessment documentation
 - Test fixtures (RSA-signed JWTs, mock Redis) and security/integration tests
-- Assessment documentation (`README.md`, `ARCHITECTURE.md`, `SECURITY.md`, `DATABASE.md`, `DISASTER_RECOVERY.md`, ADRs)
+- Final hardening: MEMBER cannot delete tasks, unknown jobs are dead-lettered (never DONE), job retention, server-side audit search, project `taskCount` aggregate, frontend workspace/View/Unassigned/CSP fixes.
 
 ## Real prompts used (Phase 1–2)
 

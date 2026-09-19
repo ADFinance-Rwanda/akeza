@@ -152,7 +152,7 @@ public class OrganizationService {
         auditService.record(
                 organizationId,
                 accessService.currentUserId(),
-                "MEMBER_ROLE_CHANGED",
+                "USER_ROLE_CHANGED",
                 "Membership",
                 saved.getId(),
                 previous.name() + "->" + role.name()

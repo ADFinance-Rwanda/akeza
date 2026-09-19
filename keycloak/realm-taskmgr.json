@@ -1,6 +1,9 @@
 {
   "realm": "taskmgr",
   "enabled": true,
+  "displayName": "Akeza",
+  "displayNameHtml": "Akeza",
+  "loginTheme": "akeza",
   "sslRequired": "none",
   "registrationAllowed": false,
   "roles": {

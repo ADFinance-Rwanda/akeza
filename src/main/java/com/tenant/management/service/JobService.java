@@ -34,7 +34,8 @@ public class JobService {
     @Transactional
     public Job enqueueOverdueScan() {
         if (jobRepository.existsByTypeAndStatus(SCAN_OVERDUE, JobStatus.PENDING)
-                || jobRepository.existsByTypeAndStatus(SCAN_OVERDUE, JobStatus.PROCESSING)) {
+                || jobRepository.existsByTypeAndStatus(SCAN_OVERDUE, JobStatus.PROCESSING)
+                || jobRepository.existsByTypeAndCreatedAtAfter(SCAN_OVERDUE, LocalDateTime.now().minusMinutes(1))) {
             return null;
         }
         return jobRepository.save(Job.builder()

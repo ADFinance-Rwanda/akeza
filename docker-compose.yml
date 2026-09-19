@@ -47,6 +47,7 @@ services:
     volumes:
       - keycloak_data:/opt/keycloak/data
       - ./keycloak/realm-taskmgr.json:/opt/keycloak/data/import/realm-taskmgr.json:ro
+      - ./keycloak/themes/akeza:/opt/keycloak/themes/akeza:ro
     networks: [platform]
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8080"]
@@ -81,6 +82,8 @@ services:
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-30}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
       ANALYTICS_CACHE_TTL_SECONDS: ${ANALYTICS_CACHE_TTL_SECONDS:-60}
+      JOB_DONE_RETENTION_HOURS: ${JOB_DONE_RETENTION_HOURS:-24}
+      JOB_FAILED_RETENTION_HOURS: ${JOB_FAILED_RETENTION_HOURS:-168}
     ports:
       - "${SERVER_PORT:-8080}:8080"
     healthcheck:
@@ -88,7 +91,7 @@ services:
       interval: 15s
       timeout: 8s
       retries: 12
-      start_period: 90s
+      start_period: 240s
     networks: [platform]
 
   worker:
@@ -116,12 +119,14 @@ services:
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-30}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
       ANALYTICS_CACHE_TTL_SECONDS: ${ANALYTICS_CACHE_TTL_SECONDS:-60}
+      JOB_DONE_RETENTION_HOURS: ${JOB_DONE_RETENTION_HOURS:-24}
+      JOB_FAILED_RETENTION_HOURS: ${JOB_FAILED_RETENTION_HOURS:-168}
     healthcheck:
       test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://localhost:8080/ready"]
       interval: 15s
       timeout: 8s
       retries: 12
-      start_period: 90s
+      start_period: 240s
     networks: [platform]
 
   frontend:

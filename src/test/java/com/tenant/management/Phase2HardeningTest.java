@@ -76,7 +76,19 @@ class Phase2HardeningTest {
         mockMvc.perform(get("/api/organizations/" + orgId + "/audit-logs")
                         .header("Authorization", bearer(TestJwtSupport.alice())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[*].action", hasItem("MEMBER_ROLE_CHANGED")));
+                .andExpect(jsonPath("$.content[*].action", hasItem("USER_ROLE_CHANGED")));
+        mockMvc.perform(get("/api/organizations/" + orgId + "/audit-logs")
+                        .header("Authorization", bearer(TestJwtSupport.alice()))
+                        .param("action", "USER_ROLE_CHANGED")
+                        .param("q", "PROJECT_MANAGER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[*].action", org.hamcrest.Matchers.everyItem(org.hamcrest.Matchers.is("USER_ROLE_CHANGED"))))
+                .andExpect(jsonPath("$.content[*].metadata", hasItem("MEMBER->PROJECT_MANAGER")));
+        mockMvc.perform(get("/api/projects")
+                        .header("Authorization", bearer(TestJwtSupport.alice()))
+                        .header("X-Organization-Id", orgId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].taskCount").isNumber());
 
         Long orgB = createOrg(TestJwtSupport.bob(), "Phase2 B", "phase2-b");
         mockMvc.perform(get("/api/organizations/" + orgB + "/audit-logs")

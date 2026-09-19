@@ -35,12 +35,12 @@ export default function Admin() {
         <section className="card">
           <h2 className="section-title">Organization management</h2>
           <p className="muted">{organization?.name} · {organization?.status}</p>
-          <Link to="/organization" className="btn btn-secondary" style={{ textDecoration: 'none', marginTop: 8, display: 'inline-flex' }}>Open organization</Link>
+          <Link to="/organization" className="btn btn-secondary" style={{ marginTop: 8 }}>Open organization</Link>
         </section>
         <section className="card">
           <h2 className="section-title">Member management</h2>
           <p className="muted">{members.length} members. Role changes are limited to Member and Project Manager.</p>
-          <Link to="/team" className="btn btn-secondary" style={{ textDecoration: 'none', marginTop: 8, display: 'inline-flex' }}>Manage team</Link>
+          <Link to="/team" className="btn btn-secondary" style={{ marginTop: 8 }}>Manage team</Link>
         </section>
         <section className="card">
           <h2 className="section-title">Role management</h2>
@@ -48,8 +48,8 @@ export default function Admin() {
         </section>
         <section className="card">
           <h2 className="section-title">Audit logs</h2>
-          <p className="muted">Review TASK_CREATED, TASK_UPDATED, MEMBER_ROLE_CHANGED and other events.</p>
-          <Link to="/audit" className="btn btn-secondary" style={{ textDecoration: 'none', marginTop: 8, display: 'inline-flex' }}>Open audit logs</Link>
+          <p className="muted">Review TASK_CREATED, TASK_UPDATED, USER_ROLE_CHANGED and other events.</p>
+          <Link to="/audit" className="btn btn-secondary" style={{ marginTop: 8 }}>Open audit logs</Link>
         </section>
         <section className="card">
           <h2 className="section-title">System information</h2>

@@ -45,6 +45,12 @@ class PlatformIntegrationTest {
     @Autowired
     private JobProcessor jobProcessor;
 
+    @Autowired
+    private com.tenant.management.repository.JobRepository jobRepository;
+
+    @Autowired
+    private com.tenant.management.service.JobRetentionJob jobRetentionJob;
+
     @Test
     void healthIsPublic() throws Exception {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
@@ -411,6 +417,88 @@ class PlatformIntegrationTest {
         assertThat(jobs.get(9L).getDeadLetteredAt()).isNotNull();
         assertThat(jobs.get(9L).getAttempts()).isEqualTo(2);
         assertThat(jobs.get(9L).getLastError()).contains("permanent");
+    }
+
+    @Test
+    void unknownJobTypeIsDeadLetteredNotDone() {
+        var jobs = new java.util.concurrent.ConcurrentHashMap<Long, com.tenant.management.entity.Job>();
+        var repo = org.mockito.Mockito.mock(com.tenant.management.repository.JobRepository.class);
+        com.tenant.management.entity.Job job = com.tenant.management.entity.Job.builder()
+                .id(11L)
+                .organizationId(3L)
+                .type("NOT_A_REAL_JOB")
+                .payload("{}")
+                .status(com.tenant.management.entity.JobStatus.PENDING)
+                .attempts(0)
+                .maxAttempts(5)
+                .availableAt(java.time.LocalDateTime.now().minusSeconds(1))
+                .build();
+        jobs.put(11L, job);
+        org.mockito.Mockito.when(repo.findDue(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> jobs.get(11L).getStatus() == com.tenant.management.entity.JobStatus.PENDING
+                        ? java.util.List.of(jobs.get(11L)) : java.util.List.of());
+        org.mockito.Mockito.when(repo.claim(org.mockito.ArgumentMatchers.eq(11L), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenAnswer(inv -> {
+                    com.tenant.management.entity.Job current = jobs.get(11L);
+                    if (current.getStatus() != com.tenant.management.entity.JobStatus.PENDING) {
+                        return 0;
+                    }
+                    current.setStatus(com.tenant.management.entity.JobStatus.PROCESSING);
+                    current.setAttempts(current.getAttempts() + 1);
+                    return 1;
+                });
+        org.mockito.Mockito.when(repo.findById(11L)).thenAnswer(inv -> java.util.Optional.of(jobs.get(11L)));
+        org.mockito.Mockito.when(repo.save(org.mockito.ArgumentMatchers.any())).thenAnswer(inv -> {
+            com.tenant.management.entity.Job saved = inv.getArgument(0);
+            jobs.put(saved.getId(), saved);
+            return saved;
+        });
+
+        JobProcessor processor = new JobProcessor(repo,
+                org.mockito.Mockito.mock(com.tenant.management.service.AnalyticsService.class),
+                org.mockito.Mockito.mock(com.tenant.management.repository.TaskRepository.class),
+                org.mockito.Mockito.mock(com.tenant.management.service.AuditService.class));
+        processor.processDue();
+        assertThat(jobs.get(11L).getStatus()).isEqualTo(com.tenant.management.entity.JobStatus.FAILED);
+        assertThat(jobs.get(11L).getStatus()).isNotEqualTo(com.tenant.management.entity.JobStatus.DONE);
+        assertThat(jobs.get(11L).getDeadLetteredAt()).isNotNull();
+        assertThat(jobs.get(11L).getLastError()).contains("Unsupported job type");
+        assertThat(jobs.get(11L).getAttempts()).isEqualTo(1);
+    }
+
+    @Test
+    void jobRetentionLeavesPendingAndProcessingJobs() {
+        com.tenant.management.entity.Job pending = jobRepository.save(com.tenant.management.entity.Job.builder()
+                .type("KEEP_PENDING")
+                .payload("{}")
+                .status(com.tenant.management.entity.JobStatus.PENDING)
+                .availableAt(java.time.LocalDateTime.now())
+                .build());
+        com.tenant.management.entity.Job processing = jobRepository.save(com.tenant.management.entity.Job.builder()
+                .type("KEEP_PROCESSING")
+                .payload("{}")
+                .status(com.tenant.management.entity.JobStatus.PROCESSING)
+                .availableAt(java.time.LocalDateTime.now())
+                .build());
+        com.tenant.management.entity.Job done = jobRepository.save(com.tenant.management.entity.Job.builder()
+                .type("PURGE_DONE")
+                .payload("{}")
+                .status(com.tenant.management.entity.JobStatus.DONE)
+                .availableAt(java.time.LocalDateTime.now())
+                .build());
+        com.tenant.management.entity.Job failed = jobRepository.save(com.tenant.management.entity.Job.builder()
+                .type("PURGE_FAILED")
+                .payload("{}")
+                .status(com.tenant.management.entity.JobStatus.FAILED)
+                .availableAt(java.time.LocalDateTime.now())
+                .build());
+
+        int removed = jobRetentionJob.purge(java.time.LocalDateTime.now().plusHours(200));
+        assertThat(removed).isGreaterThanOrEqualTo(2);
+        assertThat(jobRepository.findById(pending.getId())).isPresent();
+        assertThat(jobRepository.findById(processing.getId())).isPresent();
+        assertThat(jobRepository.findById(done.getId())).isEmpty();
+        assertThat(jobRepository.findById(failed.getId())).isEmpty();
     }
 
     private Long orgId(String slug, RequestPostProcessor user) throws Exception {

@@ -43,6 +43,11 @@ public class JobProcessor {
                 handle(current);
                 current.setStatus(JobStatus.DONE);
                 current.setLastError(null);
+            } catch (IllegalArgumentException ex) {
+                log.warn("Job {} rejected: {}", current.getId(), ex.getMessage());
+                current.setLastError(truncate(ex.getMessage()));
+                current.setStatus(JobStatus.FAILED);
+                current.setDeadLetteredAt(LocalDateTime.now());
             } catch (Exception ex) {
                 log.warn("Job {} failed attempt {}: {}", current.getId(), current.getAttempts(), ex.getMessage());
                 current.setLastError(truncate(ex.getMessage()));
@@ -69,7 +74,7 @@ public class JobProcessor {
             scanOverdue();
             return;
         }
-        log.info("No handler for job type {}", job.getType());
+        throw new IllegalArgumentException("Unsupported job type: " + job.getType());
     }
 
     private void scanOverdue() {

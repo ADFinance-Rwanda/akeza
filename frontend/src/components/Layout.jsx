@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { Icon } from './Icons.jsx'
 import { Modal, RoleBadge } from './Common.jsx'
+import BootScreen from './BootScreen.jsx'
 import { useWorkspace } from '../context/WorkspaceContext.jsx'
 import { displayName, initials, roleLabel } from '../utils/format.js'
 
@@ -33,21 +34,16 @@ export default function Layout() {
   }, [location.pathname])
 
   if (loading) {
-    return (
-      <div className="boot">
-        <div className="spinner" aria-hidden="true" />
-        <h1>Task Platform</h1>
-        <p>Signing you in…</p>
-      </div>
-    )
+    return <BootScreen title="Opening workspace" body="Checking your session and organizations." />
   }
 
   if (bootError && !me) {
     return (
-      <div className="boot">
-        <h1>Could not load your workspace</h1>
-        <p>{bootError}</p>
-      </div>
+      <BootScreen
+        title="Could not load workspace"
+        body={bootError}
+        action={<button type="button" className="btn btn-primary" onClick={logout}>Sign out</button>}
+      />
     )
   }
 
@@ -59,46 +55,49 @@ export default function Layout() {
       <div className={`overlay${menuOpen ? ' show' : ''}`} onClick={() => setMenuOpen(false)} />
       <aside className={`sidebar${menuOpen ? ' open' : ''}`} aria-label="Primary">
         <div className="brand">
-          <span className="brand-mark">TP</span>
-          Task Platform
+          <span className="brand-mark">A</span>
+          <span className="brand-word">Akeza</span>
         </div>
-        <div className="nav-group">Workspace</div>
-        <NavLink to="/dashboard" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-          <Icon name="dashboard" /> Dashboard
-        </NavLink>
-        <NavLink to="/tasks" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-          <Icon name="tasks" /> Tasks
-        </NavLink>
-        <NavLink to="/projects" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-          <Icon name="projects" /> Projects
-        </NavLink>
-        {orgId && (
-          <NavLink to="/team" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-            <Icon name="team" /> Team
+        <nav className="sidebar-nav">
+          <div className="nav-group">Workspace</div>
+          <NavLink to="/dashboard" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+            <Icon name="dashboard" /> Dashboard
           </NavLink>
-        )}
-        {canAdminOrg && (
-          <>
-            <div className="nav-group">Administration</div>
-            <NavLink to="/audit" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <Icon name="audit" /> Audit Logs
+          <NavLink to="/tasks" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+            <Icon name="tasks" /> Tasks
+          </NavLink>
+          <NavLink to="/projects" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+            <Icon name="projects" /> Projects
+          </NavLink>
+          {orgId && (
+            <NavLink to="/team" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+              <Icon name="team" /> Team
             </NavLink>
-            <NavLink to="/organization" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <Icon name="org" /> Organization
-            </NavLink>
-            <NavLink to="/admin" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <Icon name="admin" /> Administration
-            </NavLink>
-          </>
-        )}
-        {!canAdminOrg && (
-          <>
-            <div className="nav-group">Account</div>
-            <NavLink to="/organization" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
-              <Icon name="org" /> Organization
-            </NavLink>
-          </>
-        )}
+          )}
+          {canAdminOrg && (
+            <>
+              <div className="nav-group">Administration</div>
+              <NavLink to="/audit" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                <Icon name="audit" /> Audit Logs
+              </NavLink>
+              <NavLink to="/organization" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                <Icon name="org" /> Organization
+              </NavLink>
+              <NavLink to="/admin" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                <Icon name="admin" /> Administration
+              </NavLink>
+            </>
+          )}
+          {!canAdminOrg && (
+            <>
+              <div className="nav-group">Account</div>
+              <NavLink to="/organization" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+                <Icon name="org" /> Organization
+              </NavLink>
+            </>
+          )}
+        </nav>
+        <div className="sidebar-foot">Organization workspaces</div>
       </aside>
 
       <div className="main">
@@ -108,8 +107,8 @@ export default function Layout() {
           </button>
           <div>
             <div className="page-head">
-              <h1>{page.title}</h1>
-              <div className="crumb">{page.crumb}{organization?.name ? ` / ${organization.name}` : ''}</div>
+              <h1>{organization?.name || page.title}</h1>
+              <div className="crumb">{page.crumb}{organization?.name ? ` · ${page.title}` : ''}</div>
             </div>
           </div>
           <div className="top-actions">
@@ -147,13 +146,13 @@ export default function Layout() {
               </button>
               {profileOpen && (
                 <div className="menu" role="menu">
-                  <div style={{ padding: '8px 10px' }}>
+                  <div className="menu-identity">
                     <strong>{displayName(user)}</strong>
                     <div className="muted">{user?.email}</div>
                     <div style={{ marginTop: 6 }}><RoleBadge role={role} /></div>
                   </div>
                   <button type="button" onClick={() => { setProfileOpen(false); setProfileModal(true) }}>Profile</button>
-                  <button type="button" onClick={logout}>Logout</button>
+                  <button type="button" onClick={logout}>Sign out</button>
                 </div>
               )}
             </div>
@@ -181,7 +180,7 @@ export default function Layout() {
           </dl>
           <div className="modal-actions">
             <button type="button" className="btn btn-secondary" onClick={() => setProfileModal(false)}>Close</button>
-            <button type="button" className="btn btn-primary" onClick={logout}>Logout</button>
+            <button type="button" className="btn btn-primary" onClick={logout}>Sign out</button>
           </div>
         </Modal>
       )}

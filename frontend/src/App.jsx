@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import keycloak from './keycloak.js'
+import BootScreen from './components/BootScreen.jsx'
 import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
 import Layout from './components/Layout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -29,21 +30,20 @@ export default function App() {
   }, [])
 
   if (!ready) {
-    return (
-      <div className="boot">
-        <div className="spinner" aria-hidden="true" />
-        <h1>Task Platform</h1>
-        <p>Loading authentication…</p>
-      </div>
-    )
+    return <BootScreen title="Signing in" body="Connecting to Keycloak…" />
   }
 
   if (authError && !keycloak.token) {
     return (
-      <div className="boot">
-        <h1>Sign-in required</h1>
-        <p>{authError}</p>
-      </div>
+      <BootScreen
+        title="Sign-in required"
+        body={authError}
+        action={(
+          <button type="button" className="btn btn-primary" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+        )}
+      />
     )
   }
 

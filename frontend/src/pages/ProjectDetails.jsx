@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { NeedOrg } from '../components/Guards.jsx'
-import { Badge, ConfirmDialog, EmptyState, Field, Modal, Pagination, TaskTable } from '../components/Common.jsx'
+import { Badge, ConfirmDialog, Drawer, EmptyState, Field, Modal, Pagination, TaskTable } from '../components/Common.jsx'
 import TaskForm from '../components/TaskForm.jsx'
 import { Icon } from '../components/Icons.jsx'
 import { useWorkspace } from '../context/WorkspaceContext.jsx'
 import { api, userMessage } from '../services/api.js'
-import { formatDate } from '../utils/format.js'
+import { formatDate, memberName } from '../utils/format.js'
 
 export default function ProjectDetails() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { orgId, projects, members, canManageProjects, canWriteTasks, canEditTask, refreshWorkspace, toast, notifyError } = useWorkspace()
+  const { orgId, projects, members, canManageProjects, canWriteTasks, canEditTask, canDeleteTask, refreshWorkspace, toast, notifyError } = useWorkspace()
   const [project, setProject] = useState(null)
   const [tasks, setTasks] = useState({ content: [], totalPages: 0, totalElements: 0 })
   const [page, setPage] = useState(0)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState(null)
+  const [selected, setSelected] = useState(null)
   const [deletingTask, setDeletingTask] = useState(null)
   const [deletingProject, setDeletingProject] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -197,9 +198,11 @@ export default function ProjectDetails() {
               tasks={tasks.content}
               projects={[view]}
               members={members}
+              onOpen={setSelected}
               onEdit={setEditing}
               onDelete={setDeletingTask}
               canEdit={canEditTask}
+              canDelete={canDeleteTask}
               empty={<EmptyState title="No tasks found" action={canWriteTasks ? <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>Create your first task</button> : null} />}
             />
             <Pagination page={page} totalPages={tasks.totalPages} onChange={setPage} />
@@ -226,6 +229,28 @@ export default function ProjectDetails() {
         <Modal title="Edit Task" onClose={() => setEditing(null)}>
           <TaskForm initial={editing} projects={projects} members={members} showProject={false} submitLabel="Save changes" busy={busy} error={formError} onCancel={() => setEditing(null)} onSubmit={updateTask} />
         </Modal>
+      )}
+      {selected && (
+        <Drawer
+          title={selected.title}
+          onClose={() => setSelected(null)}
+          footer={
+            canEditTask(selected) || canDeleteTask(selected) ? (
+              <>
+                {canEditTask(selected) && <button type="button" className="btn btn-secondary" onClick={() => { setFormError(''); setEditing(selected) }}>Edit</button>}
+                {canDeleteTask(selected) && <button type="button" className="btn btn-danger" onClick={() => setDeletingTask(selected)}>Delete</button>}
+              </>
+            ) : null
+          }
+        >
+          <p>{selected.description || 'No description.'}</p>
+          <dl className="dl">
+            <dt>Status</dt><dd>{selected.status.replace('_', ' ')}</dd>
+            <dt>Priority</dt><dd>{selected.priority}</dd>
+            <dt>Assignee</dt><dd>{memberName(members, selected.assigneeUserId)}</dd>
+            <dt>Due date</dt><dd>{formatDate(selected.dueDate)}</dd>
+          </dl>
+        </Drawer>
       )}
       {editingProject && (
         <Modal title="Edit project" onClose={() => setEditingProject(false)}>

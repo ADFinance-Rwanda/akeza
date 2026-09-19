@@ -8,7 +8,7 @@ export function NeedOrg({ children }) {
     <div className="empty card">
       <h3>No organization selected</h3>
       <p>Create or join an organization to start managing work.</p>
-      <Link to="/organization" className="btn btn-primary" style={{ display: 'inline-flex', marginTop: 8, textDecoration: 'none' }}>
+      <Link to="/organization" className="btn btn-primary" style={{ marginTop: 8 }}>
         Go to Organization
       </Link>
     </div>

@@ -82,6 +82,8 @@ Write counters are `ratelimit:{orgId}:{userId}:{METHOD}:/tasks`. Loss of Redis *
 - Pending jobs remain `PENDING` in Postgres until claimed.
 - A job left in `PROCESSING` after a crash is reclaimed to `PENDING` after 2 minutes (`JobProcessor` stale reclaim). Until then it will not be retried.
 - Failed attempts increment `attempts` and reschedule `available_at`. After `max_attempts` the row is `FAILED`.
+- Unsupported job types are marked `FAILED` immediately (not `DONE`) with `last_error` preserved.
+- `JobRetentionJob` deletes `DONE` jobs older than 24h and `FAILED` jobs older than 168h (`JOB_DONE_RETENTION_HOURS` / `JOB_FAILED_RETENTION_HOURS`). Active `PENDING`/`PROCESSING` rows are never deleted.
 
 ## Backend failure
 

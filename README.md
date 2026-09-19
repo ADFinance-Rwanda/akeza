@@ -1,4 +1,4 @@
-# Multi-Tenant Task Platform
+# Akeza
 
 Spring Boot API + React UI for organizations, projects, and tasks. Identity is **Keycloak**. Cache and rate limits use **Redis**. Schema is **Flyway** on **PostgreSQL**.
 
@@ -13,13 +13,13 @@ A user signs in with Keycloak, creates or joins an organization, then manages pr
 - Keycloak OIDC login (`/api/me`)
 - Organizations, memberships (`ORG_ADMIN` / `PROJECT_MANAGER` / `MEMBER`) plus platform `SUPER_ADMIN`
 - Projects (status `ACTIVE`/`ARCHIVED`) and paginated/filterable tasks (`GET /api/tasks`)
-- Projects and paginated/filterable tasks
 - Optimistic locking on tasks
 - `Idempotency-Key` on task create (wait-and-replay; 24h retention)
 - Append-only audit log (ORG_ADMIN read; role changes audited)
 - Redis Lua rate limits (429) and dashboard cache TTL
-- Background worker: overdue scan + FAILED dead-letter inspect
+- Background worker: overdue scan, FAILED dead-letter inspect, terminal job retention
 - Organization suspend/reactivate
+- Server-side audit search/pagination (ORG_ADMIN)
 - Liveness: `GET /health` (also `/actuator/health/liveness`)
 - Readiness: `GET /ready` (Postgres + Redis in prod; Compose healthcheck; 3s timeout → 503)
 - Swagger UI
@@ -60,6 +60,7 @@ Copy `.env.example` to `.env` for Compose. Local API without Compose: `applicati
 | `RATE_LIMIT_REQUESTS` / `RATE_LIMIT_WINDOW_SECONDS` | Task write limiter (default 30 / 60s) |
 | `ANALYTICS_CACHE_TTL_SECONDS` | Dashboard Redis TTL (default 60) |
 | `IDEMPOTENCY_STALE_SECONDS` / `IDEMPOTENCY_RETENTION_HOURS` | In-progress reclaim / completed key purge |
+| `JOB_DONE_RETENTION_HOURS` / `JOB_FAILED_RETENTION_HOURS` | Terminal job purge (default 24h DONE / 168h FAILED; never PENDING/PROCESSING) |
 
 ## Local Installation
 
@@ -118,7 +119,16 @@ Swagger UI (`/swagger-ui.html`) is public on this local Compose API so an assess
 
 ## Authentication
 
-Keycloak realm `taskmgr`, client `task-web`. The API never issues JWTs.
+Keycloak realm `taskmgr`, public client `task-web` (PKCE). The API never issues JWTs.
+
+Compose runs Keycloak with `start-dev` over **HTTP**. That, the demo users (`Password123`), and admin `admin`/`admin` are **assessment/demo configuration**, not a production identity deployment. Use HTTPS, a production Keycloak start command, and unique secrets outside this lab.
+
+The custom `akeza` login theme is mounted at `keycloak/themes/akeza` and set in `keycloak/realm-taskmgr.json` (`loginTheme`). Realm JSON import applies when the realm is first created. An existing `keycloak_data` volume keeps the previously imported realm; to enable the theme there:
+
+```text
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8080 --realm master --user admin --password admin
+docker compose exec keycloak /opt/keycloak/bin/kcadm.sh update realms/taskmgr -s loginTheme=akeza
+```
 
 ## Testing
 

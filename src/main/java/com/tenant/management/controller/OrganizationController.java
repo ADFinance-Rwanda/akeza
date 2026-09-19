@@ -18,10 +18,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @RestController
@@ -102,14 +105,43 @@ public class OrganizationController {
     public ResponseEntity<PageResponse<AuditLogResponse>> auditLogs(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) String action,
+            @RequestParam(required = false) Long userId,
+            @RequestParam(required = false) String entityType,
+            @RequestParam(required = false) LocalDate date
     ) {
         accessService.requireRole(id, MemberRole.ORG_ADMIN);
         if (page < 0 || size < 1) {
             throw new IllegalArgumentException("page must be >= 0 and size must be >= 1");
         }
+        String query = sanitize(q);
+        String actionFilter = action == null ? "" : action.trim();
+        String entityFilter = entityType == null ? "" : entityType.trim();
+        LocalDateTime from = date == null ? null : date.atStartOfDay();
+        LocalDateTime to = date == null ? null : date.plusDays(1).atStartOfDay();
         return ResponseEntity.ok(PageResponse.from(
-                auditLogRepository.findAllByOrganizationIdOrderByCreatedAtDesc(id, PageRequest.of(page, Math.min(size, 100)))
+                auditLogRepository.search(
+                                id,
+                                actionFilter,
+                                userId,
+                                entityFilter,
+                                from,
+                                to,
+                                query,
+                                PageRequest.of(page, Math.min(size, 100), Sort.by(Sort.Direction.DESC, "createdAt")))
                         .map(AuditLogResponse::from)));
+    }
+
+    private String sanitize(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() > 80) {
+            trimmed = trimmed.substring(0, 80);
+        }
+        return trimmed.replace("%", "");
     }
 }

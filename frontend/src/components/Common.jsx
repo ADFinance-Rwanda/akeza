@@ -82,10 +82,10 @@ export function Drawer({ title, onClose, children, footer }) {
       <aside className="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" onClick={(e) => e.stopPropagation()}>
         <div className="drawer-head">
           <h2 id="drawer-title" style={{ margin: 0 }}>{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close details">✕</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close details">Close</button>
         </div>
         <div className="drawer-body">{children}</div>
-        {footer && <div className="modal-actions" style={{ padding: 16, margin: 0, borderTop: '1px solid var(--border)' }}>{footer}</div>}
+        {footer && <div className="modal-actions drawer-foot">{footer}</div>}
       </aside>
     </div>
   )
@@ -120,10 +120,10 @@ export function TaskBadges({ task }) {
   )
 }
 
-export function TaskTable({ tasks, projects, members, onOpen, onEdit, onDelete, canEdit, empty, actions = true }) {
+export function TaskTable({ tasks, projects, members, onOpen, onEdit, onDelete, canEdit, canDelete, empty, actions = true }) {
   if (!tasks.length) return empty
   return (
-    <div className="table-wrap card" style={{ padding: 0 }}>
+    <div className="table-wrap card table-card">
       <table className="data">
         <thead>
           <tr>
@@ -155,9 +155,9 @@ export function TaskTable({ tasks, projects, members, onOpen, onEdit, onDelete, 
               {actions && (
                 <td>
                   <div className="row-actions">
-                    <button type="button" className="btn btn-ghost" onClick={() => onOpen?.(task)}>View</button>
+                    {onOpen && <button type="button" className="btn btn-ghost" onClick={() => onOpen(task)}>View</button>}
                     {canEdit?.(task) && <button type="button" className="btn btn-ghost" onClick={() => onEdit?.(task)}>Edit</button>}
-                    {canEdit?.(task) && <button type="button" className="btn btn-ghost" onClick={() => onDelete?.(task)}>Delete</button>}
+                    {canDelete?.(task) && <button type="button" className="btn btn-ghost" onClick={() => onDelete?.(task)}>Delete</button>}
                   </div>
                 </td>
               )}

@@ -24,6 +24,12 @@ public interface JobRepository extends JpaRepository<Job, Long> {
 
     boolean existsByTypeAndStatus(String type, JobStatus status);
 
+    boolean existsByTypeAndCreatedAtAfter(String type, LocalDateTime createdAt);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("delete from Job j where j.status = :status and j.updatedAt < :cutoff")
+    int deleteByStatusAndUpdatedAtBefore(@Param("status") JobStatus status, @Param("cutoff") LocalDateTime cutoff);
+
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             update Job j

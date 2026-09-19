@@ -67,7 +67,7 @@ export default function Team() {
       {members.length === 0 ? (
         <EmptyState title="No members found" />
       ) : (
-        <div className="table-wrap card" style={{ padding: 0 }}>
+        <div className="table-wrap card table-card">
           <table className="data">
             <thead>
               <tr>

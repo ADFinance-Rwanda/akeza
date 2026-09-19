@@ -1,6 +1,6 @@
 # Database
 
-Flyway migrations: `src/main/resources/db/migration/V1__init.sql`, `V2__task_filter_index.sql`, `V3__task_created_by.sql`, `V4__assessment_domain.sql`, `V5__phase2_hardening.sql`
+Flyway migrations: `src/main/resources/db/migration/V1__init.sql`, `V2__task_filter_index.sql`, `V3__task_created_by.sql`, `V4__assessment_domain.sql`, `V5__phase2_hardening.sql`, `V6__job_retention_and_audit_filters.sql`, `V7__job_type_created_index.sql`
 
 Hibernate `ddl-auto` is `none`. Schema is owned by Flyway.
 
@@ -24,6 +24,9 @@ Important constraints (verified live on PostgreSQL 17.11 after `docker compose u
 - `tasks.created_by_user_id` FK + `idx_tasks_created_by` (V3)
 - FKs: `tasks_organization_id_fkey`, `tasks_project_id_fkey`, `tasks_assignee_user_id_fkey`, `tasks_created_by_user_id_fkey`
 - Indexes: `idx_tasks_org_project`, `idx_tasks_org_status`, `idx_tasks_org_priority`, `idx_tasks_org_project_status` (V2)
+- V6 worker/audit: `idx_jobs_status_updated` (retention purge on `status, updated_at`), `idx_audit_org_action_created`, `idx_audit_org_user_created`
+- V7: `idx_jobs_type_created` (SCAN_OVERDUE enqueue throttle)
+- `jobs.status` values: `PENDING`, `PROCESSING`, `DONE`, `FAILED` (`FAILED` + `dead_lettered_at` is the dead-letter state). Retention deletes only `DONE` (default 24h) and `FAILED` (default 168h); never `PENDING` or `PROCESSING`. The worker enqueues at most one `SCAN_OVERDUE` per minute (plus skip if one is already PENDING/PROCESSING).
 
 Analytics dashboard (`GET /api/analytics/dashboard`) is tenant-scoped:
 

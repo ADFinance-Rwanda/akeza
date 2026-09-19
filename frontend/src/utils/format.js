@@ -63,8 +63,8 @@ export function isOverdue(task) {
   return due < new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
 }
 
-export function memberName(members, userId) {
-  if (!userId) return 'System'
+export function memberName(members, userId, emptyLabel = 'Unassigned') {
+  if (!userId) return emptyLabel
   const m = members.find((x) => String(x.userId) === String(userId))
   return m?.userEmail || `User #${userId}`
 }

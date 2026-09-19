@@ -18,7 +18,7 @@ const emptyFilters = {
 }
 
 export default function Tasks() {
-  const { orgId, projects, members, canWriteTasks, canEditTask, toast, notifyError } = useWorkspace()
+  const { orgId, projects, members, canWriteTasks, canEditTask, canDeleteTask, toast, notifyError } = useWorkspace()
   const [filters, setFilters] = useState(emptyFilters)
   const [applied, setApplied] = useState(emptyFilters)
   const [page, setPage] = useState(0)
@@ -184,7 +184,7 @@ export default function Tasks() {
         <Field id="filter-due" label="Due date">
           <input id="filter-due" className="input" type="date" value={filters.dueDate} onChange={(e) => setFilters({ ...filters, dueDate: e.target.value })} />
         </Field>
-        <label className="field" style={{ minWidth: 90 }}>
+        <label className="field overdue-check">
           <span>Overdue</span>
           <input type="checkbox" checked={filters.overdue} onChange={(e) => setFilters({ ...filters, overdue: e.target.checked })} />
         </label>
@@ -202,6 +202,7 @@ export default function Tasks() {
           onEdit={setEditing}
           onDelete={setDeleting}
           canEdit={canEditTask}
+          canDelete={canDeleteTask}
           empty={
             filteredEmpty
               ? <EmptyState title="No tasks match your filters." action={<button type="button" className="btn btn-secondary" onClick={clearFilters}>Clear filters</button>} />
@@ -249,7 +250,7 @@ export default function Tasks() {
             canEditTask(selected) ? (
               <>
                 <button type="button" className="btn btn-secondary" onClick={() => { setFormError(''); setEditing(selected) }}>Edit</button>
-                <button type="button" className="btn btn-danger" onClick={() => setDeleting(selected)}>Delete</button>
+                {canDeleteTask(selected) && <button type="button" className="btn btn-danger" onClick={() => setDeleting(selected)}>Delete</button>}
               </>
             ) : null
           }

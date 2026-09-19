@@ -44,7 +44,7 @@ export default function Dashboard() {
       <div className="page-title">
         <div>
           <h1>Dashboard</h1>
-          <p>{organization?.name || 'Organization'} — Overview of your organization's work</p>
+          <p>{organization?.name || 'Organization'} — work in this tenant</p>
         </div>
       </div>
       {(loading || workspaceLoading) && !data ? (
@@ -96,7 +96,7 @@ export default function Dashboard() {
 
           <section className="card" style={{ marginTop: 16 }}>
             <h2 className="section-title">Activity / trends</h2>
-            <p className="muted" style={{ marginTop: -8 }}>Created and completed tasks over the last 14 days</p>
+            <p className="muted chart-lead">Created and completed over the last 14 days</p>
             <div className="chart-wrap">
               <ResponsiveContainer width="100%" height={260}>
                 <LineChart data={mergeTrends(data.createdTrend, data.completedTrend)} margin={{ left: 8, right: 16, top: 8 }}>
@@ -105,20 +105,20 @@ export default function Dashboard() {
                   <YAxis allowDecimals={false} />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="created" name="Created" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3 }} />
-                  <Line type="monotone" dataKey="completed" name="Completed" stroke="#059669" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="created" name="Created" stroke="#1f5c4a" strokeWidth={2} dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="completed" name="Completed" stroke="#9a6700" strokeWidth={2} dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           </section>
 
           <section className="card" style={{ marginTop: 16, padding: 0 }}>
-            <div className="page-title" style={{ padding: '16px 18px 0', marginBottom: 0 }}>
+            <div className="section-head">
               <h2 className="section-title">Recent tasks</h2>
-              <Link to="/tasks" className="btn btn-ghost" style={{ textDecoration: 'none' }}>View all tasks →</Link>
+              <Link to="/tasks" className="btn btn-ghost">View all</Link>
             </div>
             {recent.length === 0 ? (
-              <EmptyState title="No tasks found" action={<Link to="/tasks" className="btn btn-primary" style={{ textDecoration: 'none' }}>Create your first task</Link>} />
+              <EmptyState title="No tasks yet" action={<Link to="/tasks" className="btn btn-primary">Create a task</Link>} />
             ) : (
               <div className="table-wrap">
                 <table className="data">
